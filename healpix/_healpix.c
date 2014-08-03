@@ -1,3 +1,27 @@
+/*
+
+   Much of this code was adapted from various C/C++/f90/idl code distributed
+   with healpix and healpy, distributed under the GPL
+
+   The original license info is as follows
+
+      This file is part of HEALPix.
+
+      HEALPix is free software; you can redistribute it and/or modify
+      it under the terms of the GNU General Public License as published by
+      the Free Software Foundation; either version 2 of the License, or
+      (at your option) any later version.
+
+      HEALPix is distributed in the hope that it will be useful,
+      but WITHOUT ANY WARRANTY; without even the implied warranty of
+      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+      GNU General Public License for more details.
+
+      You should have received a copy of the GNU General Public License
+      along with HEALPix; if not, write to the Free Software
+      Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+*/
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -27,10 +51,14 @@
 #define HPX_D2R  0.017453292519943295
 #define HPX_R2D  57.295779513082323
 
+#define HPX_RING 1
+#define HPX_NEST 2
 
 struct PyHealPix {
     PyObject_HEAD
 
+    int scheme;  // HPX_RING or HPX_NEST
+    char scheme_name[5]; // "ring" or "nest"
     int64_t nside;
     int64_t npix;
     int64_t ncap;
@@ -252,28 +280,63 @@ make_double_array(npy_intp size, const char* name, long double** ptr)
 }
 */
 
+
+static void reset_bounds(double *angle,    /* MODIFIED -- the angle to bound in degrees*/
+                         double min,       /* IN -- inclusive minimum value */
+                         double max        /* IN -- exclusive maximum value */
+                        )
+{
+    while (*angle<min) {
+        *angle += 360.0;
+    }
+    while (*angle>=max) {
+        *angle -= 360.0;
+    }
+    return;
+}
+
+void reset_bounds2(double *theta, /* MODIFIED -- the -90 to 90 angle */
+                   double *phi  /* MODIFIED -- the 0 to 360 angle */
+                  )
+{
+    reset_bounds(theta, -180.0, 180.0);
+    if (fabs(*theta) > 90.0) {
+        *theta = 180.0 - *theta;
+        *phi += 180;
+    }
+    reset_bounds(theta, -180.0, 180.0);
+    reset_bounds(phi, 0.0, 360.0);
+    if (fabs(*theta)==90.0) *phi=0.;
+    return;
+}
+
+
 /*
-   convert ra,dec degrees to theta,phi radians
+   convert equatorial ra,dec degrees to angular theta,phi radians
 */
 
 static inline void eq2ang(double ra, double dec, double* theta, double* phi) {
 
-    if (ra < 0.) {
-        ra=0.;
-    }
-    if (ra > 360.) {
-        ra=360.;
-    }
-    if (dec < -90.) {
-        dec=-90.;
-    }
-    if (dec > 90.0) {
-        dec=90.;
-    }
+    // make sure ra in [0,360] and dec within [-90,90]
+    reset_bounds2(&dec, &ra);
 
     *phi = ra*HPX_D2R;
-    *theta = M_PI_2 -dec*HPX_D2R;
+    *theta = M_PI_2 - dec*HPX_D2R;
 }
+
+/*
+   convert angular theta,phi radians to equatorial ra,dec degrees
+*/
+
+static inline void ang2eq(double theta, double phi, double *ra, double *dec) {
+
+    *ra = phi*HPX_R2D;
+    *dec = (M_PI_2 - theta)*HPX_R2D;
+
+    // make sure ra in [0,360] and dec within [-90,90]
+    reset_bounds2(dec, ra);
+}
+
 
 /*
    ra,dec to standard x,y,z
@@ -293,18 +356,66 @@ static inline void eq2xyz(double ra, double dec, double* x, double* y, double* z
 static int
 PyHealPix_init(struct PyHealPix* self, PyObject *args, PyObject *kwds)
 {
+    int scheme=0;
     long nside=0;
-    if (!PyArg_ParseTuple(args, (char*)"l", &nside)) {
+    if (!PyArg_ParseTuple(args, (char*)"il", &scheme, &nside)) {
         return -1;
     }
 
-    self->nside = (int64_t) nside;
-    self->npix = nside2npix(nside);
-    self->area = nside2area(nside);
-    self->ncap = nside2ncap(nside);
+    if (scheme != HPX_RING && scheme != HPX_NEST) {
+        PyErr_Format(PyExc_ValueError,
+                     "scheme should be ring (%d) or nest (%d), got %d",
+                     HPX_RING, HPX_NEST, scheme);
+        return -1;
+    }
+    self->scheme = scheme;
+    if (scheme == HPX_RING) {
+        sprintf(self->scheme_name,"ring");
+    } else {
+        sprintf(self->scheme_name,"nest");
+    }
+    self->nside  = (int64_t) nside;
+    self->npix   = nside2npix(nside);
+    self->area   = nside2area(nside);
+    self->ncap   = nside2ncap(nside);
 
     return 0;
 }
+
+static PyObject *
+PyHealPix_repr(struct PyHealPix* self) {
+    char repr[255];
+    static const char* ring_name="RING";
+    static const char* nest_name="NEST";
+
+    const char *name=NULL;
+
+    if (self->scheme == HPX_RING) {
+        name=ring_name;
+    } else {
+        name=nest_name;
+    }
+    sprintf(repr,
+            "scheme:       %d\n"
+            "scheme_name:  %s\n"
+            "nside:        %ld\n"
+            "npix:         %ld\n"
+            "ncap:         %ld\n" 
+            "area:         %g square degrees\n"
+            "area:         %g square arcmin\n"
+            "area:         %g square arcsec\n",
+            self->scheme,
+            name,
+            self->nside,
+            self->npix,
+            self->ncap,
+            self->area,
+            self->area*3600.,
+            self->area*3600.*3600.);
+
+   return Py_BuildValue("s", repr);
+}
+
 
 static void
 PyHealPix_dealloc(struct PyHealPix* self)
@@ -376,12 +487,115 @@ static int64_t ang2pix_ring(const struct PyHealPix* self,
     return ipix;
 }
 
+int64_t cheap_isqrt(int64_t in) {
+    double din, dout;
+    int64_t out, diff;
+
+    din = (double) in;  // input integer number has ~19 significant digits (in base 10)
+    dout = sqrt(din); // accurate to ~15 digits (base 10) , for ~10 needed
+    out  = (int64_t) floor(dout); // limited accuracy creates round-off error
+
+    // integer arithmetics solves round-off error
+    diff = in - out*out;
+    if (diff < 0) {
+        out -= 1;
+    } else if (diff > 2*out) {
+        out += 1;
+    }
+
+    return out;
+}
+
+/*
+static inline int64_t nint64(double x) {
+    if (x >= 0.0) {
+        return (int64_t) (x + 0.5);
+    } else {
+        return (int64_t) (x - 0.5);
+    }
+}
+*/
+
+/*
+   get the nominal pixel center for the input theta phi
+   in the ring scheme
+*/
+static void pix2ang_ring(const struct PyHealPix* self,
+                         int64_t pixnum,
+                         double *theta,
+                         double *phi) {
+
+    int64_t nl2, nl4, iring, iphi, ip;
+    double dnside, fodd, arg;
+
+    nl2  = 2*self->nside;
+    dnside = (double) self->nside;
+
+    if (pixnum < self->ncap) {
+        // North Polar cap -------------
+        printf("north polar cap\n");
+
+        iring = (cheap_isqrt(2*pixnum+2) + 1)/2;
+        iphi  = pixnum - 2*iring*(iring - 1);
+
+        (*theta) = 2.0 * asin(iring / (sqrt(6.0)*dnside));
+        (*phi)   = ((double)iphi + 0.5) * M_PI_2/iring;
+
+    } else if (pixnum < self->npix-self->ncap) { 
+        // Equatorial region ------
+        printf("equatorial\n");
+
+        ip    = pixnum - self->ncap;
+        nl4   = 4*self->nside;
+        iring = ( ip / nl4 ) + self->nside; // counted from North pole
+        //iphi  = iand(ip, nl4-1_MKD)
+        iphi  = ip & (nl4-1);
+
+        // 0 if iring+nside is odd, 1/2 otherwise
+        //fodd  = 0.5 * ( iand(iring+nside+1,1) )
+        fodd = 0.5*(  (iring+self->nside+1) & 1  ); 
+
+        arg =  (nl2 - iring) / (1.5*dnside); 
+        printf("arg: %g\n", arg);
+        (*theta) = acos(arg);
+        (*phi)   = ((double) iphi + fodd) * M_PI_2/ dnside;
+
+    } else {
+        // South Polar cap -----------------------------------
+        printf("south polar cap\n");
+
+        ip = self->npix - pixnum;
+
+        iring = (cheap_isqrt(2*ip) + 1) / 2;
+        iphi  = 2*iring*(iring + 1) - ip;
+
+        (*theta) = M_PI - 2. * asin(iring / (sqrt(6.0)*dnside));
+        (*phi)   = ((double)iphi + 0.5) * M_PI_2/iring;
+
+    }
+
+}
+
+/*
+   get the nominal pixel center for the input ra dec
+   in the ring scheme
+*/
+static inline void pix2eq_ring(const struct PyHealPix* self,
+                               int64_t pixnum,
+                               double *ra,
+                               double *dec) {
+
+    double theta, phi;
+    pix2ang_ring(self, pixnum, &theta, &phi);
+    ang2eq(theta, phi, ra, dec);
+}
+
 /*
    returns the ring number in {1, 4*nside-1} from the z coordinate
    returns the ring closest to the z provided
 */
 
-int64_t get_ring_num(const struct PyHealPix* self, double z) {
+static int64_t get_ring_num(const struct PyHealPix* self, double z) {
     int64_t nside, iring;
     nside=self->nside;
 
@@ -413,7 +627,7 @@ int64_t get_ring_num(const struct PyHealPix* self, double z) {
 
 */
 
-void is_in_ring(
+static void is_in_ring(
         const struct PyHealPix* self, 
         int64_t iz, 
         double phi0, 
@@ -545,9 +759,7 @@ static void query_disc_ring(const struct PyHealPix* self,
         }
         b = cosang - z*z0;
         c = 1. - z*z;
-        //double x = (cosang-z*z0)/sqrt((1-z0)*(1+z0));
 
-        dphi;
         if ((x0==0.) && (y0==0.)) {
             dphi=M_PI;
             if (b > 0.) {
@@ -618,29 +830,21 @@ static inline int64_t eq2pix_ring(const struct PyHealPix* hpix,
 }
 
 
-static PyObject *
-PyHealPix_repr(struct PyHealPix* self) {
-    char repr[255];
-    sprintf(repr,
-            "nside:   %ld\n"
-            "npix:    %ld\n"
-            "ncap:    %ld\n" 
-            "area:    %g square degrees\n"
-            "area:    %g square arcmin\n"
-            "area:    %g square arcsec\n",
-            self->nside,
-            self->npix,
-            self->ncap,
-            self->area,
-            self->area*3600.,
-            self->area*3600.*3600.);
-
-   return Py_BuildValue("s", repr);
-}
-
 /*
    getters
 */
+static PyObject*
+PyHealPix_get_scheme(struct PyHealPix* self, PyObject* args)
+{
+   return Py_BuildValue("i", self->scheme); 
+}
+static PyObject*
+PyHealPix_get_scheme_name(struct PyHealPix* self, PyObject* args)
+{
+   return Py_BuildValue("s", self->scheme_name); 
+}
+
+
 static PyObject*
 PyHealPix_get_nside(struct PyHealPix* self, PyObject* args)
 {
@@ -666,6 +870,45 @@ PyHealPix_get_area(struct PyHealPix* self, PyObject* args)
 
 
 /*
+   convert the input theta,phi arrays to pixel numbers in the ring scheme.  no
+   error checking done here
+
+   theta,phi should be double arrays
+   pixnum is int64 array
+*/
+static PyObject*
+PyHealPix_fill_ang2pix(struct PyHealPix* self, PyObject* args)
+{
+    PyObject* theta_obj=NULL;
+    PyObject* phi_obj=NULL;
+    PyObject* pixnum_obj=NULL;
+
+    double theta, phi;
+    int64_t *pix_ptr=NULL;
+    npy_intp i=0, num=0;
+
+    if (!PyArg_ParseTuple(args, (char*)"OOO", 
+                          &theta_obj, &phi_obj, &pixnum_obj)) {
+        return NULL;
+    }
+
+    num=PyArray_SIZE(theta_obj);
+
+    for (i=0; i<num; i++) {
+        theta = *(double *) PyArray_GETPTR1(theta_obj, i);
+        phi = *(double *) PyArray_GETPTR1(phi_obj, i);
+        pix_ptr = (int64_t *) PyArray_GETPTR1(pixnum_obj, i);
+        if (self->scheme == HPX_RING) {
+            (*pix_ptr) = ang2pix_ring(self, theta, phi);
+        } else {
+            //(*pix_ptr) = ang2pix_nest(self, ra, dec);
+        }
+    }
+
+    Py_RETURN_NONE;
+}
+
+/*
    convert the input ra,dec arrays to pixel numbers in the ring scheme.  no error checking
    done here
 
@@ -673,7 +916,7 @@ PyHealPix_get_area(struct PyHealPix* self, PyObject* args)
    pixnum is int64 array
 */
 static PyObject*
-PyHealPix_eq2pix_ring(struct PyHealPix* self, PyObject* args)
+PyHealPix_fill_eq2pix(struct PyHealPix* self, PyObject* args)
 {
     PyObject* ra_obj=NULL;
     PyObject* dec_obj=NULL;
@@ -694,7 +937,96 @@ PyHealPix_eq2pix_ring(struct PyHealPix* self, PyObject* args)
         ra  = *(double *) PyArray_GETPTR1(ra_obj, i);
         dec = *(double *) PyArray_GETPTR1(dec_obj, i);
         pix_ptr = (int64_t *) PyArray_GETPTR1(pixnum_obj, i);
-        (*pix_ptr) = eq2pix_ring(self, ra, dec);
+
+        if (self->scheme == HPX_RING) {
+            (*pix_ptr) = eq2pix_ring(self, ra, dec);
+        } else {
+            //(*pix_ptr) = eq2pix_nest(self, ra, dec);
+        }
+    }
+
+    Py_RETURN_NONE;
+}
+
+/*
+
+   convert the pixnums to the nominal pixel center in angular theta,phi
+   coordinates
+
+   noerror checking done here
+
+   pixnum is int64 array
+   theta,phi should be double arrays
+*/
+static PyObject*
+PyHealPix_fill_pix2ang(struct PyHealPix* self, PyObject* args)
+{
+    PyObject* pixnum_obj=NULL;
+    PyObject* theta_obj=NULL;
+    PyObject* phi_obj=NULL;
+
+    double pixnum;
+    double *theta_ptr=NULL, *phi_ptr=NULL;
+    npy_intp i=0, num=0;
+
+    if (!PyArg_ParseTuple(args, (char*)"OOO", 
+                          &pixnum_obj, &theta_obj, &phi_obj)) {
+        return NULL;
+    }
+
+    num=PyArray_SIZE(theta_obj);
+
+    for (i=0; i<num; i++) {
+        pixnum = *(int64_t *) PyArray_GETPTR1(pixnum_obj, i);
+        theta_ptr = (double *) PyArray_GETPTR1(theta_obj, i);
+        phi_ptr = (double *) PyArray_GETPTR1(phi_obj, i);
+        if (self->scheme == HPX_RING) {
+            pix2ang_ring(self, pixnum, theta_ptr, phi_ptr);
+        } else {
+            //pix2ang_nest(self, pixnum, theta_ptr, phi_ptr);
+        }
+    }
+
+    Py_RETURN_NONE;
+}
+
+/*
+
+   convert the pixnums to the nominal pixel center in equatorial
+    ra,dec coordinates in degrees
+
+   noerror checking done here
+
+   pixnum is int64 array
+   ra,dec should be double arrays
+*/
+static PyObject*
+PyHealPix_fill_pix2eq(struct PyHealPix* self, PyObject* args)
+{
+    PyObject* pixnum_obj=NULL;
+    PyObject* ra_obj=NULL;
+    PyObject* dec_obj=NULL;
+
+    double pixnum;
+    double *ra_ptr=NULL, *dec_ptr=NULL;
+    npy_intp i=0, num=0;
+
+    if (!PyArg_ParseTuple(args, (char*)"OOO", 
+                          &pixnum_obj, &ra_obj, &dec_obj)) {
+        return NULL;
+    }
+
+    num=PyArray_SIZE(ra_obj);
+
+    for (i=0; i<num; i++) {
+        pixnum = *(int64_t *) PyArray_GETPTR1(pixnum_obj, i);
+        ra_ptr = (double *) PyArray_GETPTR1(ra_obj, i);
+        dec_ptr = (double *) PyArray_GETPTR1(dec_obj, i);
+        if (self->scheme == HPX_RING) {
+            pix2eq_ring(self, pixnum, ra_ptr, dec_ptr);
+        } else {
+            //pix2eq_nest(self, pixnum, ra_ptr, dec_ptr);
+        }
     }
 
     Py_RETURN_NONE;
@@ -704,11 +1036,19 @@ PyHealPix_eq2pix_ring(struct PyHealPix* self, PyObject* args)
 // stand alone methods
 static PyMethodDef PyHealPix_methods[] = {
 
+    {"get_scheme", (PyCFunction)PyHealPix_get_scheme, METH_VARARGS, "get scheme\n"},
+    {"get_scheme_name", (PyCFunction)PyHealPix_get_scheme_name, METH_VARARGS, "get scheme name\n"},
+
     {"get_nside", (PyCFunction)PyHealPix_get_nside, METH_VARARGS, "get nside\n"},
     {"get_npix", (PyCFunction)PyHealPix_get_npix, METH_VARARGS, "get the number of pixels at this resolution\n"},
     {"get_ncap", (PyCFunction)PyHealPix_get_ncap, METH_VARARGS, "get the number of pixels in the north polar cap at this resolution\n"},
     {"get_area", (PyCFunction)PyHealPix_get_area, METH_VARARGS, "get the area of a pixel at this resolution\n"},
-    {"_fill_eq2pix_ring", (PyCFunction)PyHealPix_eq2pix_ring, METH_VARARGS, "convert ra,dec degrees to pixel number in ring scheme.  Don't call this method directly, since no error or type checking is performed\n"},
+
+    {"_fill_ang2pix", (PyCFunction)PyHealPix_fill_ang2pix, METH_VARARGS, "convert theta,phi radians to pixel number.  Don't call this method directly, since no error or type checking is performed\n"},
+    {"_fill_eq2pix", (PyCFunction)PyHealPix_fill_eq2pix, METH_VARARGS, "convert ra,dec degrees to pixel number.  Don't call this method directly, since no error or type checking is performed\n"},
+
+    {"_fill_pix2ang", (PyCFunction)PyHealPix_fill_pix2ang, METH_VARARGS, "convert pixel number to angular theta,phi radians.  Don't call this method directly, since no error or type checking is performed\n"},
+    {"_fill_pix2eq", (PyCFunction)PyHealPix_fill_pix2eq, METH_VARARGS, "convert pixel number to equatorial ra,dec degrees.  Don't call this method directly, since no error or type checking is performed\n"},
     {NULL}  /* Sentinel */
 };
 
