@@ -1,3 +1,15 @@
+"""
+classes
+-------
+HealPix:
+    class to work with healpixels
+
+Map:
+    class to contain a healpix map, read and write to fits files, etc.
+
+constants
+----------
+"""
 import numpy
 from . import _healpix
 from . import coords

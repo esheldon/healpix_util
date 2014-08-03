@@ -1,3 +1,22 @@
+"""
+functions
+---------
+eq2ang(ra, dec):
+    convert equatorial ra,dec in degrees to angular theta, phi in radians
+ang2eq(theta, phi):
+    convert angular theta, phi in radians to equatorial ra,dec in degrees
+eq2xyz(ra, dec):
+    Convert equatorial ra,dec in degrees to x,y,z on the unit sphere
+ang2xyz(theta, phi):
+    Convert angular theta,phi in radians to x,y,z on the unit sphere
+
+constants
+---------
+SYSTEM_ANG=1
+    angular theta,phi system in radians
+SYSTEM_EQ=2
+    equatorial ra,dec system in degrees
+"""
 import numpy
 
 SYSTEM_ANG=1
