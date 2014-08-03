@@ -93,11 +93,11 @@ static inline void hpix_eq2tp(double ra, double dec, double* theta, double* phi)
 */
 static inline void hpix_eq2xyz(double ra, double dec, double* x, double* y, double* z) {
 
-    double theta=0, phi=0;
+    double theta=0, phi=0, sintheta=0;
 
     hpix_eq2tp(ra, dec, &theta, &phi);
 
-    double sintheta = sin(theta);
+    sintheta = sin(theta);
     *x = sintheta * cos(phi);
     *y = sintheta * sin(phi);
     *z = cos(theta);

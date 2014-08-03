@@ -47,6 +47,10 @@ class HealPix(_healpix.HealPix):
         pixnum: scalar array
             The pixel number(s)
         """
+
+        if scheme != 'ring':
+            raise ValueError("only ring scheme is currently supported")
+
         is_scalar=numpy.isscalar(ra)
 
         ra  = numpy.array(ra, dtype='f8', ndmin=1, copy=False)
