@@ -1,34 +1,6 @@
 import numpy
 from . import _healpix
 
-def eq2ang(ra, dec):
-    """
-    convert equatorial ra,dec in degrees to angular theta, phi in radians
-
-    theta = pi/2-dec*D2R
-    phi = ra*D2R
-
-    parameters
-    ----------
-    ra: scalar or array
-        Right ascension in degrees
-    dec: scalar or array
-        Declination in degrees
-
-    returns
-    -------
-    theta: scalar or array
-        pi/2-dec*D2R
-    phi: scalar or array
-        phi = ra*D2R
-    """
-    theta = numpy.deg2rad(dec)
-    theta *= -1
-    theta += (0.5*numpy.pi)
-    phi = numpy.deg2rad(ra)
-
-    return theta, phi
-
 class HealPix(_healpix.HealPix):
     """
     class representing a healpix resolution
@@ -94,3 +66,9 @@ class HealPix(_healpix.HealPix):
         if is_scalar:
             pixnum=pixnum[0]
         return pixnum
+
+    # read-only attributes
+    nside = property(_healpix.HealPix.get_nside,doc="get the resolution")
+    npix = property(_healpix.HealPix.get_npix,doc="number of pixels in the sky")
+    ncap = property(_healpix.HealPix.get_ncap,doc="number of pixels in the northern cap")
+    area = property(_healpix.HealPix.get_area,doc="area of a pixel")
