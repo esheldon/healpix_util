@@ -556,7 +556,6 @@ static void pix2ang_ring(const struct PyHealPix* self,
         fodd = 0.5*(  (iring+self->nside+1) & 1  ); 
 
         arg =  (nl2 - iring) / (1.5*dnside); 
-        printf("arg: %g\n", arg);
         (*theta) = acos(arg);
         (*phi)   = ((double) iphi + fodd) * M_PI_2/ dnside;
 
