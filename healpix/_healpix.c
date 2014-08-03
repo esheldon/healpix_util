@@ -729,7 +729,7 @@ static void query_disc_ring(const struct PyHealPix* self,
     rlat0  = asin(z0);    // latitude in RAD of the center
     rlat1  = rlat0 + radius;
     rlat2  = rlat0 - radius;
-    zmax;
+
     if (rlat1 >=  M_PI_2) {
         zmax =  1.0;
     } else {
