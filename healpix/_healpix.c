@@ -533,7 +533,7 @@ static void pix2ang_ring(const struct PyHealPix* self,
 
     if (pixnum < self->ncap) {
         // North Polar cap -------------
-        printf("north polar cap\n");
+        //printf("north polar cap\n");
 
         iring = (cheap_isqrt(2*pixnum+2) + 1)/2;
         iphi  = pixnum - 2*iring*(iring - 1);
@@ -543,7 +543,7 @@ static void pix2ang_ring(const struct PyHealPix* self,
 
     } else if (pixnum < self->npix-self->ncap) { 
         // Equatorial region ------
-        printf("equatorial\n");
+        //printf("equatorial\n");
 
         ip    = pixnum - self->ncap;
         nl4   = 4*self->nside;
@@ -562,7 +562,7 @@ static void pix2ang_ring(const struct PyHealPix* self,
 
     } else {
         // South Polar cap -----------------------------------
-        printf("south polar cap\n");
+        //printf("south polar cap\n");
 
         ip = self->npix - pixnum;
 
