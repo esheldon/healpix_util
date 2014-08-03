@@ -6,7 +6,19 @@
 #include "numpy/arrayobject.h" 
 
 #ifndef M_PI
+# define M_E		2.7182818284590452354	/* e */
+# define M_LOG2E	1.4426950408889634074	/* log_2 e */
+# define M_LOG10E	0.43429448190325182765	/* log_10 e */
+# define M_LN2		0.69314718055994530942	/* log_e 2 */
+# define M_LN10		2.30258509299404568402	/* log_e 10 */
 # define M_PI		3.14159265358979323846	/* pi */
+# define M_PI_2		1.57079632679489661923	/* pi/2 */
+# define M_PI_4		0.78539816339744830962	/* pi/4 */
+# define M_1_PI		0.31830988618379067154	/* 1/pi */
+# define M_2_PI		0.63661977236758134308	/* 2/pi */
+# define M_2_SQRTPI	1.12837916709551257390	/* 2/sqrt(pi) */
+# define M_SQRT2	1.41421356237309504880	/* sqrt(2) */
+# define M_SQRT1_2	0.70710678118654752440	/* 1/sqrt(2) */
 #endif
 
 #define HPX_TWO_PI   6.28318530717958647693 /* 2*pi */
@@ -69,7 +81,7 @@ make_double_array(npy_intp size, const char* name, long double** ptr)
    convert ra,dec degrees to theta,phi radians
 */
 
-static inline void hpix_eq2tp(double ra, double dec, double* theta, double* phi) {
+static inline void hpix_eq2ang(double ra, double dec, double* theta, double* phi) {
 
     if (ra < 0.) {
         ra=0.;
@@ -95,7 +107,7 @@ static inline void hpix_eq2xyz(double ra, double dec, double* x, double* y, doub
 
     double theta=0, phi=0, sintheta=0;
 
-    hpix_eq2tp(ra, dec, &theta, &phi);
+    hpix_eq2ang(ra, dec, &theta, &phi);
 
     sintheta = sin(theta);
     *x = sintheta * cos(phi);
@@ -114,7 +126,7 @@ static int64_t hpix_eq2pix_ring(const struct PyHealPix* hpix,
     int64_t ipix=0;
     double theta=0, phi=0, z=0, za=0, tt=0;
 
-    hpix_eq2tp(ra, dec, &theta, &phi);
+    hpix_eq2ang(ra, dec, &theta, &phi);
 
     z = cos(theta);
     za = fabs(z);
