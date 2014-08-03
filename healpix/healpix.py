@@ -218,7 +218,7 @@ class HealPix(_healpix.HealPix):
                    theta=None,
                    phi=None,
                    radius=None,
-                   inclusive=True):
+                   inclusive=False):
         """
         get pixels that are contained within or intersect the disc
 
@@ -240,7 +240,7 @@ class HealPix(_healpix.HealPix):
             If False, include only pixels whose centers are within the disc.
             If True, include any pixels that intersect the disc
 
-            Default is True
+            Default is False
 
         returns
         -------
