@@ -1,5 +1,6 @@
 import numpy
 from . import _healpix
+from . import coords
 
 RING=1
 NEST=2
@@ -30,8 +31,8 @@ class HealPix(_healpix.HealPix):
         
         Only the ring scheme is fully supported currently
 
-    attributes
-    ----------
+    read-only attributes
+    --------------------
     scheme
     scheme_name
     nside
@@ -41,8 +42,21 @@ class HealPix(_healpix.HealPix):
 
     methods
     -------
+    # see docs for each method for more information
+
     hp=HealPix(nside)
-    pixnum=hp.eq2pix(ra, dec) 
+
+    pixnums=hp.eq2pix(ra, dec)
+        Get pixnums for the input equatorial ra,dec in degrees
+    pixnums=hp.ang2pix(ra, dec) 
+        Get pixnums for the input angular theta,phi in radians
+    ra,dec=hp.pix2eq(pixnums)
+        Get equatorial ra,dec in degrees for the input pixels
+    theta,phi=hp.pix2ang(pixnums)
+        Get angular theta,phi in radians for the input pixels
+    pixnums = hp.query_disc(ra=,dec=,theta=,phi=,radius=,inclusive=)
+        Get ids of pixels whose centers are contained with the disc
+        or that intersect the disc (inclusive=True)
 
     # the following methods are the same as the read only attributes above
     get_scheme()
@@ -186,7 +200,66 @@ class HealPix(_healpix.HealPix):
             phi=phi[0]
         return theta, phi
 
+    def query_disc(self,
+                   ra=None,
+                   dec=None,
+                   theta=None,
+                   phi=None,
+                   radius=None,
+                   inclusive=True):
+        """
+        get pixels that are contained within or intersect the disc
 
+        Send either
+            ra=,dec=,radius= in degrees
+        or
+            theta=,phi=,radius in radians
+
+        parameters
+        ----------
+        Either of the following set of keywords
+
+        ra=,dec=,radius=: scalars
+            equatorial coordinates and radius in degrees
+        theta=,phi=,radius=: scalars
+            angular coordinates and radius in radians
+
+        inclusive: bool
+            If False, include only pixels whose centers are within the disc.
+            If True, include any pixels that intersect the disc
+
+            Default is True
+
+        returns
+        -------
+        pixnums: array
+            Array of pixel numbers that are contained or intersect the disc
+        """
+
+        if not inclusive:
+            inclusive_int=0
+        else:
+            inclusive_int=1
+
+        if radius is None:
+            raise ValueError("send radius=")
+
+        if ra is not None and dec is not None:
+            pixnums=super(HealPix,self)._query_disc(ra,
+                                                    dec,
+                                                    radius,
+                                                    coords.SYSTEM_EQ,
+                                                    inclusive)
+        elif theta is not None and phi is not None:
+            pixnums=super(HealPix,self)._query_disc(theta,
+                                                    phi,
+                                                    radius,
+                                                    coords.SYSTEM_ANG,
+                                                    inclusive)
+        else:
+            raise ValueError("send ra=,dec= or theta=,phi=")
+
+        return pixnums
 
     # read-only attributes
     scheme = property(_healpix.HealPix.get_scheme,doc="get the healpix scheme")

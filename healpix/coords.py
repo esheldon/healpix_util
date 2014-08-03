@@ -1,5 +1,8 @@
 import numpy
 
+SYSTEM_ANG=1
+SYSTEM_EQ=2
+
 def eq2ang(ra, dec):
     """
     convert equatorial ra,dec in degrees to angular theta, phi in radians
@@ -25,6 +28,34 @@ def eq2ang(ra, dec):
     phi = numpy.deg2rad(ra)
 
     return theta, phi
+
+def ang2eq(theta, phi):
+    """
+    convert angular theta, phi in radians to equatorial ra,dec in degrees
+
+    ra = phi*R2D
+    dec = (pi/2-theta)*R2D
+
+    parameters
+    ----------
+    theta: scalar or array
+        angular theta in radians
+    phi: scalar or array
+        angular phi in radians
+
+    returns
+    -------
+    ra: scalar or array
+        phi*R2D
+    dec: scalar or array
+        (pi/2-theta)*R2D
+    """
+
+    ra = numpy.rad2deg(phi)
+    dec = numpy.rad2deg(numpy.pi*0.5 - theta)
+
+    return ra,dec
+
 
 def eq2xyz(ra, dec):
     """

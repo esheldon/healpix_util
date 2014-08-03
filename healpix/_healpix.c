@@ -54,6 +54,11 @@
 #define HPX_RING 1
 #define HPX_NEST 2
 
+// angular theta,phi in radians
+#define HPX_SYSTEM_ANG 1
+// equatorial ra,dec in degrees
+#define HPX_SYSTEM_EQ 2
+
 struct PyHealPix {
     PyObject_HEAD
 
@@ -256,20 +261,20 @@ static inline int64_t i64min(int64_t v1, int64_t v2) {
     return v1 < v2 ? v1 : v2;
 }
 
-/*
+
 static PyObject*
-make_double_array(npy_intp size, const char* name, long double** ptr)
+make_i64_array(npy_intp size, const char* name, int64_t** ptr)
 {
     PyObject* array=NULL;
     npy_intp dims[1];
     int ndims=1;
-    if (size <= 0) {
-        PyErr_Format(PyExc_ValueError, "size of %s array must be > 0",name);
+    if (size < 0) {
+        PyErr_Format(PyExc_ValueError, "size of %s array must be >= 0",name);
         return NULL;
     }
 
     dims[0] = size;
-    array = PyArray_ZEROS(ndims, dims, NPY_DOUBLE, 0);
+    array = PyArray_ZEROS(ndims, dims, NPY_INT64, 0);
     if (array==NULL) {
         PyErr_Format(PyExc_MemoryError, "could not create %s array",name);
         return NULL;
@@ -278,7 +283,6 @@ make_double_array(npy_intp size, const char* name, long double** ptr)
     *ptr = PyArray_DATA((PyArrayObject*)array);
     return array;
 }
-*/
 
 
 static void reset_bounds(double *angle,    /* MODIFIED -- the angle to bound in degrees*/
@@ -487,6 +491,21 @@ static int64_t ang2pix_ring(const struct PyHealPix* self,
     return ipix;
 }
 
+/*
+   convert equatorial ra,dec to pixel number in the ring scheme
+*/
+static inline int64_t eq2pix_ring(const struct PyHealPix* hpix,
+                                  double ra,
+                                  double dec) {
+
+    int64_t pixnum;
+    double theta, phi;
+    eq2ang(ra, dec, &theta, &phi);
+    pixnum=ang2pix_ring(hpix, theta, phi);
+    return pixnum;
+}
+
+
 int64_t cheap_isqrt(int64_t in) {
     double din, dout;
     int64_t out, diff;
@@ -683,26 +702,35 @@ static void is_in_ring(
 
 
 /*
-   fill listpix with list of all pixels with centers *within* radius r
-   of the point
+   query_disc
 
-   If you want all pixels that are within or intersect the circle at radius
-   r, use intersect_disc_ring
+   If inclusive==0, find the list of pixels whose centers are contained within
+   the disc
 
-   ra,dec - degrees
-   radius - degrees
+   If inclusive==1, find the list of pixels whose centers are contained within
+   the disc or if the pixel intersects the disc
+
  */
 
 
 static void query_disc_ring(const struct PyHealPix* self,
                             double ra,
                             double dec,
-                            double radius, 
+                            double radius_degrees, 
+                            int inclusive,
                             struct i64stack* listpix) {
 
     int64_t nside, irmin, irmax, iz;
     double cosang, x0, y0, z0, dth1, dth2, phi0, cosphi0, a;
+    double radius; // radians
     double rlat0, rlat1, rlat2, zmax, zmin, tmp;
+
+    radius = radius_degrees*HPX_D2R;
+    if (inclusive) {
+        // this number is acos(2/3)
+        double fudge = 0.84106867056793033/self->nside; // 1.071* half pixel size
+        radius += fudge;
+    }
 
     //double vector0[3];
     nside=self->nside;
@@ -784,48 +812,6 @@ SKIP2:
         continue;
 
     }
-}
-
-/*
-   fill listpix with list of all pixels with centers within radius r
-   or intersect the circle at radius r.  If you don't want to include
-   those that intersect but with center outside, use query_disc_ring
-
-   ra,dec - degrees
-   radius - degrees
- */
-
-
-static void intersect_disc_ring(const struct PyHealPix* self,
-                                double ra,
-                                double dec,
-                                double radius, 
-                                struct i64stack* listpix) {
-    double fudge;
-
-    // this is from the f90 code
-    // this number is acos(2/3)
-    fudge = 0.84106867056793033/self->nside; // 1.071* half pixel size
-
-    // this is from the c++ code
-    //double fudge = 1.362*M_PI/(4*hpix->nside);
-
-    radius += fudge;
-    query_disc_ring(self, ra, dec, radius, listpix);
-
-}
-/*
-   convert equatorial ra,dec to pixel number in the ring scheme
-*/
-static inline int64_t eq2pix_ring(const struct PyHealPix* hpix,
-                                  double ra,
-                                  double dec) {
-
-    int64_t pixnum;
-    double theta, phi;
-    eq2ang(ra, dec, &theta, &phi);
-    pixnum=ang2pix_ring(hpix, theta, phi);
-    return pixnum;
 }
 
 
@@ -1032,6 +1018,87 @@ PyHealPix_fill_pix2eq(struct PyHealPix* self, PyObject* args)
 }
 
 
+
+/*
+
+   query_disc
+
+   If inclusive==0, find the list of pixels whose centers are contained within
+   the disc
+
+   If inclusive==1, find the list of pixels whose centers are contained within
+   the disc or if the pixel intersects the disc
+
+   If system==HPX_SYSTEM_ANG then the input is
+       theta,phi,radius_radians all in radians
+   if system==HPX_SYSTEM_EQ then the input is
+       ra,dec,radius_degrees all in degrees
+*/
+static PyObject*
+PyHealPix_query_disc(struct PyHealPix* self, PyObject* args)
+{
+    int system, inclusive;
+    double ang1, ang2, radius;
+    double ra, dec, radius_degrees;
+    struct i64stack* listpix=NULL;
+
+    // output
+    PyObject* pixnum_obj=NULL;
+    int64_t *pixnum_ptr;
+    int64_t i;
+
+    if (!PyArg_ParseTuple(args, (char*)"dddii", 
+                          &ang1, &ang2, &radius, &system,&inclusive)) {
+        return NULL;
+    }
+
+    if (system==HPX_SYSTEM_ANG) {
+        ang2eq(ang1, ang2, &ra, &dec);
+        radius_degrees = radius*HPX_R2D;
+    } else if (system==HPX_SYSTEM_EQ) {
+        ra=ang1;
+        dec=ang2;
+        radius_degrees=radius;
+    } else {
+        PyErr_Format(PyExc_ValueError, 
+                     "system should be %d or %d, got %d\n",
+                     HPX_SYSTEM_ANG, HPX_SYSTEM_EQ, system);
+        return NULL;
+    }
+
+    listpix=i64stack_new(0);
+    if (self->scheme==HPX_RING) {
+        query_disc_ring(self,
+                        ra,
+                        dec,
+                        radius_degrees,
+                        inclusive,
+                        listpix);
+    } else {
+        /*
+        query_disc_nest(self,
+                       ra,
+                       dec,
+                       radius_degrees,
+                       inclusive,
+                       listpix);
+        */
+    }
+
+    pixnum_obj = make_i64_array(listpix->size, "pixnum", &pixnum_ptr);
+    if (pixnum_obj != NULL) {
+        for (i=0; i<listpix->size; i++) {
+            pixnum_ptr[i] = listpix->data[i];
+        }
+    }
+
+    listpix = i64stack_delete(listpix);
+
+    return pixnum_obj;
+}
+
+
+
 // stand alone methods
 static PyMethodDef PyHealPix_methods[] = {
 
@@ -1042,6 +1109,9 @@ static PyMethodDef PyHealPix_methods[] = {
     {"get_npix", (PyCFunction)PyHealPix_get_npix, METH_VARARGS, "get the number of pixels at this resolution\n"},
     {"get_ncap", (PyCFunction)PyHealPix_get_ncap, METH_VARARGS, "get the number of pixels in the north polar cap at this resolution\n"},
     {"get_area", (PyCFunction)PyHealPix_get_area, METH_VARARGS, "get the area of a pixel at this resolution\n"},
+
+    {"_query_disc", (PyCFunction)PyHealPix_query_disc, METH_VARARGS, 
+        "Find the list of pixels whose centers are contained within or intersect the disc.\n"},
 
     {"_fill_ang2pix", (PyCFunction)PyHealPix_fill_ang2pix, METH_VARARGS, "convert theta,phi radians to pixel number.  Don't call this method directly, since no error or type checking is performed\n"},
     {"_fill_eq2pix", (PyCFunction)PyHealPix_fill_eq2pix, METH_VARARGS, "convert ra,dec degrees to pixel number.  Don't call this method directly, since no error or type checking is performed\n"},
