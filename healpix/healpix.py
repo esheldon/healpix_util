@@ -365,30 +365,29 @@ def read_fits(filename, **keys):
                                  "to specify")
             scheme_in_file = scheme
 
+        if scheme is not None and scheme != scheme_in_file:
+            print("converting from scheme '%s' "
+                  "to '%s'" % (scheme_in_file,scheme))
+            do_convert=True
+        else:
+            do_convert=False
+
         names=data.dtype.names
         if names is not None:
             # there were multiple columns read
-            res={}
-            for name in names:
-                res[name] = data[name].ravel()
-
             map_dict={}
-            for name in res:
-                map_dict[name] = Map(scheme_in_file,res[name])
+            for name in names:
+                m = Map(scheme_in_file,data[name])
+                if do_convert:
+                    m=m.convert(scheme)
+                map_dict[name] = m
 
-            if scheme is not None and scheme != scheme_in_file:
-                print("converting from scheme '%s' "
-                      "to '%s'" % (scheme_in_file,scheme))
-                for name in map_dict:
-                    map_dict[name] = map_dict[name].convert(scheme)
             result = map_dict
         else:
-            # a single column was read
+            # columns=scalar was used to read
             m = Map(scheme_in_file,data)
-            if scheme is not None and scheme != scheme_in_file:
-                print("converting from scheme '%s' "
-                      "to '%s'" % (scheme_in_file,scheme))
-                m = m.convert(scheme)
+            if do_convert:
+                m=m.convert(scheme)
             result = m
 
     gethead=keys.get("header",False)
@@ -434,6 +433,7 @@ class Map(object):
         get number of pixels in map.  Also attributes .size and .npix
     """
     def __init__(self, scheme, array):
+        array=array.ravel()
         nside = npix2nside(array.size)
         self._hpix = HealPix(scheme, nside)
         self._array = numpy.array(array, ndmin=1, copy=False)
