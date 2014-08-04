@@ -11,6 +11,10 @@ functions
 ---------
 read_fits:
     Read a healpix map from a fits file
+get_scheme_string():
+    Get string form of input scheme specification
+get_scheme_int():
+    Get integer form of input scheme specification
 
 constants
 ----------
@@ -29,24 +33,6 @@ from . import coords
 RING=1
 NEST=2
 
-_scheme_int_map={'ring':RING,
-                 'RING':RING,
-                 RING:RING,
-                 'nest':NEST,
-                 'nested':NEST,
-                 'NEST':NEST,
-                 'NESTED':NEST,
-                 NEST:NEST}
-_scheme_string_map={'ring':'ring',
-                    'RING':'ring',
-                    RING:'ring',
-                    'nest':'nest',
-                    'nested':'nest',
-                    'NEST':'nest',
-                    'NESTED':'nest',
-                    NEST:'nest'}
-
-
 class HealPix(_healpix.HealPix):
     """
     class representing a healpix resolution
@@ -55,11 +41,11 @@ class HealPix(_healpix.HealPix):
     ----------
     scheme: string or int
         if a string is input, the value should be
-            'ring' or 'nest'
+            'ring' or 'nest' or 'nested'
         if an int is input, the value should be
-            healpix.RING or healpix.NEST.
+            healpix.RING (1) or healpix.NEST (2)
         
-        Only the ring scheme is fully supported currently
+        Currently, only the ring scheme is fully supported
 
     nside: int
         healpix resolution
@@ -103,7 +89,7 @@ class HealPix(_healpix.HealPix):
     """
 
     def __init__(self, scheme, nside):
-        scheme_int = _scheme_int_map.get(scheme,None)
+        scheme_int = get_scheme_int(scheme)
         if scheme_int != RING:
             raise ValueError("only ring scheme is currently supported")
 
@@ -297,14 +283,91 @@ class HealPix(_healpix.HealPix):
         return pixnums
 
     # read-only attributes
-    scheme = property(_healpix.HealPix.get_scheme,doc="get the healpix scheme")
-    scheme_name = property(_healpix.HealPix.get_scheme_name,doc="get the healpix scheme name")
+    scheme = property(_healpix.HealPix.get_scheme,doc="get the healpix scheme name")
+    scheme_num = property(_healpix.HealPix.get_scheme_num,doc="get the healpix scheme number")
     nside = property(_healpix.HealPix.get_nside,doc="get the resolution")
     npix = property(_healpix.HealPix.get_npix,doc="number of pixels in the sky")
     ncap = property(_healpix.HealPix.get_ncap,doc="number of pixels in the northern cap")
     area = property(_healpix.HealPix.get_area,doc="area of a pixel")
 
 def read_fits(filename, **keys):
+    """
+    read healpix map(s) from the specified file
+
+    parameters
+    ----------
+    filename: string
+        The fits filename
+    scheme: string or int
+        Optional scheme specification.  If the scheme is not specified
+        in the header as 'ORDERING', then you can specify it with
+        this keyword.
+
+        Also if the specified scheme does not match the ORDERING in the
+        header, the maps will be converted to the requested scheme.
+
+    **keys:
+        other keywords for the fits reading, such as 
+            ext= (default 1)
+            columns= (default is to read all columns)
+            header=True to return the header
+        See the fitsio documentation for more details
+
+    returns
+    -------
+    a Map object holding the requested maps.
+    
+    """
+    import fitsio
+
+    scheme = keys.get("scheme",None)
+    if scheme is not None:
+        scheme=get_scheme_string(scheme)
+
+    # ensure None or a sequence, which makes
+    # fitsio return a recarray
+    columns=keys.get('columns',None)
+    if columns is not None:
+        if numpy.isscalar(columns):
+            keys['columns']=[columns]
+
+    with fitsio.FITS(filename) as fits:
+
+        ext=keys.get('ext',1)
+        hdu = fits[ext]
+        if not isinstance(hdu,fitsio.fitslib.TableHDU):
+            raise ValueError("extension %s is not a table" % ext)
+
+        header = hdu.read_header()
+
+        # user may specify columns= here
+        data = hdu.read(**keys)
+
+
+        if 'ordering' in header:
+            scheme_in_file = header['ordering'].strip()
+            scheme_in_file = get_scheme_string(scheme_in_file)
+        else:
+            # we need input from the user
+            if scheme is None:
+                raise ValueError("ORDERING not in header, send scheme= "
+                                 "to specify")
+            scheme_in_file = scheme
+
+        hmap = Map(scheme_in_file, data)
+
+        if scheme is not None and scheme != scheme_in_file:
+            print("converting from scheme '%s' "
+                  "to '%s'" % (scheme_in_file,scheme))
+            hmap = hmap.convert(scheme)
+
+    gethead=keys.get("header",False)
+    if gethead:
+        return hmap, header
+    else:
+        return hmap
+
+def read_fits_old(filename, **keys):
     """
     read healpix map(s) from the specified file
 
@@ -341,7 +404,7 @@ def read_fits(filename, **keys):
 
     scheme = keys.get("scheme",None)
     if scheme is not None:
-        scheme=_scheme_string_map[scheme]
+        scheme=get_scheme_string(scheme)
 
     with fitsio.FITS(filename) as fits:
 
@@ -357,7 +420,7 @@ def read_fits(filename, **keys):
 
         if 'ordering' in header:
             scheme_in_file = header['ordering'].strip()
-            scheme_in_file = _scheme_string_map[scheme_in_file]
+            scheme_in_file = get_scheme_string(scheme_in_file)
         else:
             # we need input from the user
             if scheme is None:
@@ -396,6 +459,7 @@ def read_fits(filename, **keys):
     else:
         return result
 
+
 class Map(object):
     """
     class to represent a healpix map.
@@ -410,75 +474,156 @@ class Map(object):
     array: sequence or array
         array representing the healpix map data
 
-    read-only attributes
-    --------------------
-    size:
-        number of pixels.  You can also do len(map) and
-        map.npix
+    attributes
+    ----------
+    .hpix    # A HealPix object, the pixel specification
+    .data    # the healpix map as a numpy array.  .data.size is 
+             # the number of pixels
 
     data access
     -----------
-    # use numpy array access notation
+    # access the .data attribute, which is a numpy array
     m=Map(scheme, array)
-    m[35]
-    m[200:200]
-    m[indices]
+    print(m)
+
+    metadata:
+    scheme:       1
+    scheme_name:  RING
+    nside:        4096
+    npix:         201326592
+    ncap:         33546240
+    area:         6.24178e-08 square degrees
+    area:         0.000224704 square arcmin
+    area:         0.808935 square arcsec
+
+    map data:
+    array([ -1.63750000e+30,  -1.63750000e+30,  -1.63750000e+30, ...,
+            -1.63750000e+30,  -1.63750000e+30,  -1.63750000e+30], dtype=float32)
+
+    print("scheme:",m.hpix.scheme)
+    print("nside:",m.hpix.nside)
+    print("number of pixels:",m.data.size)
+    print("should match:",m.hpix.npix)
+
+    print("pixel 35:",m.data[35])
+    print("pixels 200-209:",m.data[200:210])
+    print("pixels",indices,":,m.data[indices])
+
+    # convert map to nested
+    nmap = m.convert("nest")
+    # convert map to ring
+    rmap = m.convert("ring")
 
     methods
     -------
-    convert():
+    convert(scheme):
         convert the map to the specified scheme.  If the current map is already
         in the specified scheme, no copy of the underlying data is made
-    get_npix():
-        get number of pixels in map.  Also attributes .size and .npix
     """
     def __init__(self, scheme, array):
-        array=array.ravel()
+
+        array = array.ravel()
         nside = npix2nside(array.size)
-        self._hpix = HealPix(scheme, nside)
-        self._array = numpy.array(array, ndmin=1, copy=False)
 
-    def get_nside(self):
+        self.hpix = HealPix(scheme, nside)
+        self.data = numpy.array(array, ndmin=1, copy=False)
+    
+    def quad_check(self,
+                   ra=None, dec=None,
+                   theta=None, phi=None,
+                   radius=None,
+                   inclusive=False,
+                   pmin=0.95):
         """
-        get nside for the map
+        Check quadrants around the specified point.
         """
-        return self._hpix.nside
-    nside = property(get_nside)
 
-    def __len__(self):
-        """
-        get number of pixels in the map
-        """
-        return self._array.size
-        
-    def get_npix(self):
-        """
-        get number of pixels in the map
-        """
-        return self._array.size
+        pixnums = self.hpix.query_disc(ra=ra,
+                                       dec=dec,
+                                       theta=theta,
+                                       phi=phi,
+                                       radius=radius,
+                                       inclusive=inclusive)
+        # the "weights" from our map.
+        weights = self.data[pixnums]
+        wmax = weights.max()
 
-    npix = property(get_npix)
-    size = property(get_npix)
+        wsum_norm=weights.sum()/wmax
+        print("wsum norm:",wsum_norm)
 
     def __getitem__(self, args):
-        """
-        access map pixels
-        """
-        return self._array[args]
+        return self.data[args]
 
-    def __setitem__(self, args, vals):
-        """
-        set map pixels
-        """
-        self._array[args] = vals
-    
     def __repr__(self):
-        hrep = self._hpix.__repr__()
-        array_repr=self._array.__repr__()
-        rep="""healpix Map
+        hrep = self.hpix.__repr__()
+        array_repr=self.data.__repr__()
+        rep="""
+healpix Map
 
-metadata:
 %s
 map data:
 %s""" % (hrep, array_repr)
         return rep
+
+def get_scheme_string(scheme):
+    """
+    get the string version of a scheme.
+
+    parameters
+    ----------
+    scheme: int or string
+        'ring' or 'nest' or 'nested' in lower or upper case,
+        or 1 for ring, 2 for nest
+
+        The numerical versions can be gotten with healpix.RING and
+        healpix.NEST
+
+    returns
+    -------
+    'ring' or 'ntest'
+    """
+    if scheme not in _scheme_string_map:
+        raise ValueError("bad scheme specification: '%s'" % scheme)
+    return _scheme_string_map[scheme]
+
+def get_scheme_int(scheme):
+    """
+    get the string version of a scheme.
+
+    parameters
+    ----------
+    scheme: int or string
+        'ring' or 'nest' or 'nested' in lower or upper case,
+        or 1 for ring, 2 for nest
+
+        The numerical versions can be gotten with healpix.RING and
+        healpix.NEST
+
+    returns
+    -------
+    1 for ring, 2 for nest
+    """
+    if scheme not in _scheme_int_map:
+        raise ValueError("bad scheme specification: '%s'" % scheme)
+    return _scheme_int_map[scheme]
+
+
+_scheme_int_map={'ring':RING,
+                 'RING':RING,
+                 RING:RING,
+                 'nest':NEST,
+                 'nested':NEST,
+                 'NEST':NEST,
+                 'NESTED':NEST,
+                 NEST:NEST}
+_scheme_string_map={'ring':'ring',
+                    'RING':'ring',
+                    RING:'ring',
+                    'nest':'nest',
+                    'nested':'nest',
+                    'NEST':'nest',
+                    'NESTED':'nest',
+                    NEST:'nest'}
+
+
+

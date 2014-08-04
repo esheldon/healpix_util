@@ -863,12 +863,12 @@ SKIP2:
    getters
 */
 static PyObject*
-PyHealPix_get_scheme(struct PyHealPix* self, PyObject* args)
+PyHealPix_get_scheme_num(struct PyHealPix* self, PyObject* args)
 {
    return Py_BuildValue("i", self->scheme); 
 }
 static PyObject*
-PyHealPix_get_scheme_name(struct PyHealPix* self, PyObject* args)
+PyHealPix_get_scheme(struct PyHealPix* self, PyObject* args)
 {
    return Py_BuildValue("s", self->scheme_name); 
 }
@@ -1146,8 +1146,8 @@ PyHealPix_query_disc(struct PyHealPix* self, PyObject* args)
 // stand alone methods
 static PyMethodDef PyHealPix_methods[] = {
 
-    {"get_scheme", (PyCFunction)PyHealPix_get_scheme, METH_VARARGS, "get scheme\n"},
-    {"get_scheme_name", (PyCFunction)PyHealPix_get_scheme_name, METH_VARARGS, "get scheme name\n"},
+    {"get_scheme", (PyCFunction)PyHealPix_get_scheme, METH_VARARGS, "get scheme name\n"},
+    {"get_scheme_num", (PyCFunction)PyHealPix_get_scheme_num, METH_VARARGS, "get scheme number\n"},
 
     {"get_nside", (PyCFunction)PyHealPix_get_nside, METH_VARARGS, "get nside\n"},
     {"get_npix", (PyCFunction)PyHealPix_get_npix, METH_VARARGS, "get the number of pixels at this resolution\n"},
