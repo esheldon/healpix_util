@@ -284,13 +284,13 @@ class HealPix(_healpix.HealPix):
                                                     dec,
                                                     radius,
                                                     coords.SYSTEM_EQ,
-                                                    inclusive)
+                                                    inclusive_int)
         elif theta is not None and phi is not None:
             pixnums=super(HealPix,self)._query_disc(theta,
                                                     phi,
                                                     radius,
                                                     coords.SYSTEM_ANG,
-                                                    inclusive)
+                                                    inclusive_int)
         else:
             raise ValueError("send ra=,dec= or theta=,phi=")
 
