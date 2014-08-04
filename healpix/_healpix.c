@@ -59,6 +59,11 @@
 // equatorial ra,dec in degrees
 #define HPX_SYSTEM_EQ 2
 
+// this is 1<<29 for 64-bit
+#define HPX_MAX_NSIDE 536870912L
+// 12*max_nside^2
+#define HPX_MAX_NPIX 3458764513820540928L
+
 struct PyHealPix {
     PyObject_HEAD
 
@@ -226,7 +231,43 @@ static int64_t* i64stack_find(struct i64stack* stack, int64_t el) {
     return (int64_t*) bsearch(&el, stack->data, stack->size, sizeof(int64_t), __i64stack_compare_el);
 }
 
+/*
+   helper functions
+ */
+static inline int64_t i64max(int64_t v1, int64_t v2) {
+    return v1 > v2 ? v1 : v2;
+}
+static inline int64_t i64min(int64_t v1, int64_t v2) {
+    return v1 < v2 ? v1 : v2;
+}
 
+static inline int64_t nint64(double x) {
+    if (x >= 0.0) {
+        return (int64_t) (x + 0.5);
+    } else {
+        return (int64_t) (x - 0.5);
+    }
+}
+
+
+/*
+   verify validity of nside and npix
+*/
+static int nside_is_ok(long nside)
+{
+    return 
+        (nside > 0)
+        && (nside <= HPX_MAX_NSIDE)
+        && ( (nside & (nside - 1)) == 0 );
+}
+static inline int npix_is_ok(int64_t npix)
+{
+    if (npix < 12 || npix > HPX_MAX_NPIX) {
+        return 0;
+    } else {
+        return 1;
+    }
+}
 
 /*
    number of pixels in the sky
@@ -252,15 +293,23 @@ static inline int64_t nside2ncap(int64_t nside) {
 }
 
 /*
-   helper functions
- */
-static inline int64_t i64max(int64_t v1, int64_t v2) {
-    return v1 > v2 ? v1 : v2;
-}
-static inline int64_t i64min(int64_t v1, int64_t v2) {
-    return v1 < v2 ? v1 : v2;
-}
+   infer nside from npix
+*/
+static inline int64_t npix2nside(int64_t npix)
+{
+    int64_t nside=0, npix_tmp=0;
+    if (!npix_is_ok(npix)) {
+        return -1;
+    }
 
+    nside = nint64( sqrt(npix/12.0) );
+
+    npix_tmp = nside2npix(nside);
+    if (npix_tmp != npix) {
+        return -1;
+    }
+    return nside;
+}
 
 static PyObject*
 make_i64_array(npy_intp size, const char* name, int64_t** ptr)
@@ -363,6 +412,11 @@ PyHealPix_init(struct PyHealPix* self, PyObject *args, PyObject *kwds)
     int scheme=0;
     long nside=0;
     if (!PyArg_ParseTuple(args, (char*)"il", &scheme, &nside)) {
+        return -1;
+    }
+
+    if (!nside_is_ok(nside)) {
+        PyErr_Format(PyExc_ValueError, "bad nside: %ld", nside);
         return -1;
     }
 
@@ -524,16 +578,6 @@ int64_t cheap_isqrt(int64_t in) {
 
     return out;
 }
-
-/*
-static inline int64_t nint64(double x) {
-    if (x >= 0.0) {
-        return (int64_t) (x + 0.5);
-    } else {
-        return (int64_t) (x - 0.5);
-    }
-}
-*/
 
 /*
    get the nominal pixel center for the input theta phi
@@ -1174,9 +1218,113 @@ static PyTypeObject PyHealPixType = {
 
 
 
-// stand alone methods
+/*
+   stand alone methods
+*/
+
+PyObject *PyHealPix_nside_is_ok(PyObject *self, PyObject *args)
+{
+    long nside;
+    if (!PyArg_ParseTuple(args, (char*)"l", &nside)) {
+        return NULL;
+    }
+    return Py_BuildValue("i", nside_is_ok(nside));
+}
+PyObject *PyHealPix_npix_is_ok(PyObject *self, PyObject *args)
+{
+    long npix;
+    if (!PyArg_ParseTuple(args, (char*)"l", &npix)) {
+        return NULL;
+    }
+    return Py_BuildValue("i", npix_is_ok(npix));
+}
+
+
+PyObject *PyHealPix_nside2npix(PyObject *self, PyObject *args)
+{
+    long nside, npix;
+    if (!PyArg_ParseTuple(args, (char*)"l", &nside)) {
+        return NULL;
+    }
+
+    if (!nside_is_ok(nside)) {
+        PyErr_Format(PyExc_ValueError, "bad nside: %ld", nside);
+        return NULL;
+    }
+    npix = nside2npix(nside);
+    return Py_BuildValue("l", npix);
+}
+PyObject *PyHealPix_npix2nside(PyObject *self, PyObject *args)
+{
+    long nside, npix;
+    if (!PyArg_ParseTuple(args, (char*)"l", &npix)) {
+        return NULL;
+    }
+
+    if (!npix_is_ok(npix)) {
+        PyErr_Format(PyExc_ValueError, "bad npix: %ld", npix);
+        return NULL;
+    }
+    nside = npix2nside(npix);
+    return Py_BuildValue("l", nside);
+}
+
+
 static PyMethodDef healpix_methods[] = {
 
+    {"nside_is_ok", (PyCFunction)PyHealPix_nside_is_ok, METH_VARARGS, 
+        "determine if input nside is valid\n"
+        "\n"
+        "parameters\n"
+        "----------\n"
+        "nside: integer\n"
+        "    resolution of the healpix map\n"
+        "\n"
+        "returns\n"
+        "-------\n"
+        "validity: int\n"
+        "    0 if nside is invalid, nonzero otherwise\n"
+        },
+    {"npix_is_ok", (PyCFunction)PyHealPix_npix_is_ok, METH_VARARGS, 
+        "determine if input npix is valid\n"
+        "\n"
+        "parameters\n"
+        "----------\n"
+        "npix: integer\n"
+        "    number of pixels in a healpix map\n"
+        "\n"
+        "returns\n"
+        "-------\n"
+        "validity: int\n"
+        "    0 if npix is invalid, nonzero otherwise\n"
+        },
+
+    {"nside2npix", (PyCFunction)PyHealPix_nside2npix, METH_VARARGS, 
+        "get npix for the input nside\n"
+        "\n"
+        "parameters\n"
+        "----------\n"
+        "nside: integer\n"
+        "    resolution of the healpix map\n"
+        "\n"
+        "returns\n"
+        "-------\n"
+        "npix: integer\n"
+        "    number of pixels a the map with the given nside\n"
+        },
+    {"npix2nside", (PyCFunction)PyHealPix_npix2nside, METH_VARARGS, 
+        "get nside for the given npix\n"
+        "\n"
+        "parameters\n"
+        "----------\n"
+        "npix: integer\n"
+        "    number of pixels in a map\n"
+        "\n"
+        "returns\n"
+        "-------\n"
+        "nside: integer\n"
+        "    nside implied by the input npix\n"
+        },
 
     {NULL}  /* Sentinel */
 };

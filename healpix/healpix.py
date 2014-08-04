@@ -5,25 +5,45 @@ HealPix:
     class to work with healpixels
 
 Map:
-    class to contain a healpix map, read and write to fits files, etc.
+    class to contain a healpix map
+
+functions
+---------
+read_fits:
+    Read a healpix map from a fits file
 
 constants
 ----------
+RING=1
+    integer referring to ring scheme
+NEST=2
+    integer referring to nest scheme
+
 """
+from __future__ import print_function
 import numpy
 from . import _healpix
+from ._healpix import nside_is_ok, npix_is_ok, nside2npix, npix2nside
 from . import coords
 
 RING=1
 NEST=2
 
 _scheme_int_map={'ring':RING,
+                 'RING':RING,
                  RING:RING,
                  'nest':NEST,
+                 'nested':NEST,
+                 'NEST':NEST,
+                 'NESTED':NEST,
                  NEST:NEST}
 _scheme_string_map={'ring':'ring',
+                    'RING':'ring',
                     RING:'ring',
                     'nest':'nest',
+                    'nested':'nest',
+                    'NEST':'nest',
+                    'NESTED':'nest',
                     NEST:'nest'}
 
 
@@ -33,8 +53,6 @@ class HealPix(_healpix.HealPix):
 
     parameters
     ----------
-    nside: int
-        healpix resolution
     scheme: string or int
         if a string is input, the value should be
             'ring' or 'nest'
@@ -42,6 +60,9 @@ class HealPix(_healpix.HealPix):
             healpix.RING or healpix.NEST.
         
         Only the ring scheme is fully supported currently
+
+    nside: int
+        healpix resolution
 
     read-only attributes
     --------------------
@@ -56,7 +77,9 @@ class HealPix(_healpix.HealPix):
     -------
     # see docs for each method for more information
 
-    hp=HealPix(nside)
+    scheme="ring"
+    nside=4096
+    hp=HealPix(scheme,nside)
 
     pixnums=hp.eq2pix(ra, dec)
         Get pixnums for the input equatorial ra,dec in degrees
@@ -79,7 +102,7 @@ class HealPix(_healpix.HealPix):
     get_area()
     """
 
-    def __init__(self, nside, scheme='ring'):
+    def __init__(self, scheme, nside):
         scheme_int = _scheme_int_map.get(scheme,None)
         if scheme_int != RING:
             raise ValueError("only ring scheme is currently supported")
@@ -280,3 +303,159 @@ class HealPix(_healpix.HealPix):
     npix = property(_healpix.HealPix.get_npix,doc="number of pixels in the sky")
     ncap = property(_healpix.HealPix.get_ncap,doc="number of pixels in the northern cap")
     area = property(_healpix.HealPix.get_area,doc="area of a pixel")
+
+def read_fits(filename, **keys):
+    """
+    read healpix map(s) from the specified file
+
+    parameters
+    ----------
+    filename: string
+        The fits filename
+    scheme: string or int
+        Optional scheme specification.  If the scheme is not specified
+        in the header as 'ORDERING', then you can specify it with
+        this keyword.
+
+        Also if the specified scheme does not match the ORDERING in the
+        header, the maps will be converted to the requested scheme.
+
+    **keys:
+        other keywords for the fits reading, such as ext (default 1)
+        and columns (default is to read all columns)
+
+    returns
+    -------
+    healpix.Map (or maps).  If a single column is read, a single
+    map is returned.  Otherwise a list of Maps is returned.
+    """
+    import fitsio
+
+    scheme = keys.get("scheme",None)
+    if scheme is not None:
+        scheme=_scheme_string_map[scheme]
+
+    with fitsio.FITS(filename) as fits:
+
+        ext=keys.get('ext',1)
+        hdu = fits[ext]
+        if not isinstance(hdu,fitsio.fitslib.TableHDU):
+            raise ValueError("extension %s is not a table" % ext)
+
+        header = hdu.read_header()
+
+        # user may specify columns= here
+        data = hdu.read(**keys)
+
+        if 'ordering' in header:
+            scheme_in_file = header['ordering'].strip()
+            scheme_in_file = _scheme_string_map[scheme_in_file]
+        else:
+            # we need input from the user
+            if scheme is None:
+                raise ValueError("ORDERING not in header, send scheme= "
+                                 "to specify")
+            scheme_in_file = scheme
+
+        if data.dtype.names is not None:
+            # there were multiple columns read
+            data = [data[name].ravel() for name in data.dtype.names]
+            maps = [Map(scheme_in_file,d) for d in data]
+
+            if scheme is not None and scheme != scheme_in_file:
+                print("converting from scheme '%s' "
+                      "to '%s'" % (scheme_in_file,scheme))
+                maps = [m.convert(scheme) for m in maps]
+
+            if len(maps) == 1:
+                result=maps[0]
+            else:
+                result = maps
+        else:
+            # a single column was read
+            m = Map(scheme_in_file,data)
+            if scheme is not None and scheme != scheme_in_file:
+                print("converting from scheme '%s' "
+                      "to '%s'" % (scheme_in_file,scheme))
+                m = m.convert(scheme)
+            result = m
+
+    return result
+
+class Map(object):
+    """
+    class to represent a healpix map.
+
+    parameters
+    ----------
+    scheme: string or int
+        if a string is input, the value should be
+            'ring' or 'nest'
+        if an int is input, the value should be
+            healpix.RING or healpix.NEST.
+    array: sequence or array
+        array representing the healpix map data
+
+    read-only attributes
+    --------------------
+    size:
+        number of pixels.  You can also do len(map) and
+        map.npix
+
+    methods
+    -------
+    convert():
+        convert the map to the specified scheme.  If the current map is already
+        in the specified scheme, no copy of the underlying data is made
+    get_npix():
+        get number of pixels in map.  Also attributes .size and .npix
+    """
+    def __init__(self, scheme, array):
+        nside = npix2nside(array.size)
+        self._hpix = HealPix(scheme, nside)
+        self._array = numpy.array(array, ndmin=1, copy=False)
+
+    def get_nside(self):
+        """
+        get nside for the map
+        """
+        return self._hpix.nside
+    nside = property(get_nside)
+
+    def __len__(self):
+        """
+        get number of pixels in the map
+        """
+        return self._array.size
+        
+    def get_npix(self):
+        """
+        get number of pixels in the map
+        """
+        return self._array.size
+
+    npix = property(get_npix)
+    size = property(get_npix)
+
+    def __getitem__(self, args):
+        """
+        access map pixels
+        """
+        return self._array[args]
+
+    def __setitem__(self, args, vals):
+        """
+        set map pixels
+        """
+        self._array[args] = vals
+    
+    def __repr__(self):
+        hrep = self._hpix.__repr__()
+        array_repr=self._array.__repr__()
+        rep="""healpix Map
+
+metadata:
+%s
+map data:
+%s""" % (hrep, array_repr)
+        return rep
