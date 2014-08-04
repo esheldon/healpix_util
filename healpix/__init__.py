@@ -1,11 +1,10 @@
 """
 todo
 
-    read_map to read a map from fits file
-
     Map class to hold a map
-        allow conversions .as_ring() .as_nest() return
-        new maps, only copying if necessary
+        allow conversions .convert()
+
+    add quad_check to Map
 
     in coords.py use coordinate system converts from C code
 

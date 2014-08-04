@@ -321,13 +321,21 @@ def read_fits(filename, **keys):
         header, the maps will be converted to the requested scheme.
 
     **keys:
-        other keywords for the fits reading, such as ext (default 1)
-        and columns (default is to read all columns)
+        other keywords for the fits reading, such as 
+            ext= (default 1)
+            columns= (default is to read all columns)
+            header=True to return the header
+        See the fitsio documentation for more details
 
     returns
     -------
-    healpix.Map (or maps).  If a single column is read, a single
-    map is returned.  Otherwise a list of Maps is returned.
+    By default, a dict of healpix.Map is returned, keyed by the map column
+    name.
+    
+    If a single scalar columns= is specified, a single map is returned
+    instead of a list.
+
+    if header=True is specified, a tuple (maps, header) is returned
     """
     import fitsio
 
@@ -357,20 +365,23 @@ def read_fits(filename, **keys):
                                  "to specify")
             scheme_in_file = scheme
 
-        if data.dtype.names is not None:
+        names=data.dtype.names
+        if names is not None:
             # there were multiple columns read
-            data = [data[name].ravel() for name in data.dtype.names]
-            maps = [Map(scheme_in_file,d) for d in data]
+            res={}
+            for name in names:
+                res[name] = data[name].ravel()
+
+            map_dict={}
+            for name in res:
+                map_dict[name] = Map(scheme_in_file,res[name])
 
             if scheme is not None and scheme != scheme_in_file:
                 print("converting from scheme '%s' "
                       "to '%s'" % (scheme_in_file,scheme))
-                maps = [m.convert(scheme) for m in maps]
-
-            if len(maps) == 1:
-                result=maps[0]
-            else:
-                result = maps
+                for name in map_dict:
+                    map_dict[name] = map_dict[name].convert(scheme)
+            result = map_dict
         else:
             # a single column was read
             m = Map(scheme_in_file,data)
@@ -380,7 +391,11 @@ def read_fits(filename, **keys):
                 m = m.convert(scheme)
             result = m
 
-    return result
+    gethead=keys.get("header",False)
+    if gethead:
+        return result, header
+    else:
+        return result
 
 class Map(object):
     """
