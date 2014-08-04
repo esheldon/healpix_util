@@ -417,6 +417,14 @@ class Map(object):
         number of pixels.  You can also do len(map) and
         map.npix
 
+    data access
+    -----------
+    # use numpy array access notation
+    m=Map(scheme, array)
+    m[35]
+    m[200:200]
+    m[indices]
+
     methods
     -------
     convert():
