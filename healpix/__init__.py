@@ -4,7 +4,7 @@ todo
     Map class to hold a map
         allow conversions .convert()
 
-    add quad_check to Map
+    test quad_check with real weight map
 
     in coords.py use coordinate system converts from C code
 
