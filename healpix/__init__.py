@@ -11,8 +11,14 @@ todo
 """
 
 from .version import __version__
-from .healpix import HealPix, Map, read_fits
-from .healpix import nside_is_ok, npix_is_ok, nside2npix, npix2nside
-from .healpix import RING, NEST
-from .coords  import eq2ang, ang2eq, eq2xyz, ang2xyz
-from .coords  import randsphere, randcap, get_posangle_eq, get_quadrant_eq
+
+from .healpix import \
+        HealPix, Map, \
+        nside_is_ok, npix_is_ok, nside2npix, npix2nside, \
+        RING, NEST
+
+from .fileio import read_map, read_maps, read_density_map, read_density_maps
+
+from .coords  import \
+        eq2ang, ang2eq, eq2xyz, ang2xyz, \
+        randsphere, randcap, get_posangle_eq, get_quadrant_eq

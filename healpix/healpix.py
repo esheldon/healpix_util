@@ -7,10 +7,11 @@ HealPix:
 Map:
     class to contain a healpix map
 
+DensityMap:
+    class to contain a density healpix map
+
 functions
 ---------
-read_fits:
-    Read a healpix map from a fits file
 get_scheme_string():
     Get string form of input scheme specification
 get_scheme_int():
@@ -23,6 +24,20 @@ RING=1
 NEST=2
     integer referring to nest scheme
 
+POINT_OK=1<<0
+    bit mask to indicate a point is "good" in a density map
+QUAD12_OK=1<<1
+    bit mask to indicate pair of quadrants 1+2 is "good" around a point
+    in a density map
+QUAD23_OK=1<<2
+    bit mask to indicate pair of quadrants 2+3 is "good" around a point
+    in a density map
+QUAD34_OK=1<<3
+    bit mask to indicate pair of quadrants 3+4 is "good" around a point
+    in a density map
+QUAD41_OK=1<<4
+    bit mask to indicate pair of quadrants 4+1 is "good" around a point
+    in a density map
 """
 from __future__ import print_function
 import numpy
@@ -296,98 +311,6 @@ class HealPix(_healpix.HealPix):
     area = property(_healpix.HealPix.get_area,doc="area of a pixel")
 
 
-def read_fits(filename, **keys):
-    """
-    read healpix map(s) from the specified file
-
-    parameters
-    ----------
-    filename: string
-        The fits filename
-    scheme: string or int
-        Optional scheme specification.  If the scheme is not specified
-        in the header as 'ORDERING', then you can specify it with
-        this keyword.
-
-        Also if the specified scheme does not match the ORDERING in the
-        header, the maps will be converted to the requested scheme.
-
-    **keys:
-        other keywords for the fits reading, such as 
-            ext= (default 1)
-            columns= (default is to read all columns)
-            header=True to return the header
-        See the fitsio documentation for more details
-
-    returns
-    -------
-    By default, a dict of healpix.Map is returned, keyed by the column names.
-    
-    If a single scalar columns= is specified, a single map is returned instead
-    of a dict
-
-    if header=True is specified, a tuple (maps, header) is returned
-    """
-    import fitsio
-
-    scheme = keys.get("scheme",None)
-    if scheme is not None:
-        scheme=get_scheme_string(scheme)
-
-    with fitsio.FITS(filename) as fits:
-
-        ext=keys.get('ext',1)
-        hdu = fits[ext]
-        if not isinstance(hdu,fitsio.fitslib.TableHDU):
-            raise ValueError("extension %s is not a table" % ext)
-
-        header = hdu.read_header()
-
-        # user may specify columns= here
-        data = hdu.read(**keys)
-
-        if 'ordering' in header:
-            scheme_in_file = header['ordering'].strip()
-            scheme_in_file = get_scheme_string(scheme_in_file)
-        else:
-            # we need input from the user
-            if scheme is None:
-                raise ValueError("ORDERING not in header, send scheme= "
-                                 "to specify")
-            scheme_in_file = scheme
-
-        if scheme is not None and scheme != scheme_in_file:
-            print("converting from scheme '%s' "
-                  "to '%s'" % (scheme_in_file,scheme))
-            do_convert=True
-        else:
-            do_convert=False
-
-        names=data.dtype.names
-        if names is not None:
-            # there were multiple columns read
-            map_dict={}
-            for name in names:
-                m = Map(scheme_in_file,data[name])
-                if do_convert:
-                    m=m.convert(scheme)
-                map_dict[name] = m
-
-            result = map_dict
-        else:
-            # columns=scalar was used to read
-            m = Map(scheme_in_file,data)
-            if do_convert:
-                m=m.convert(scheme)
-            result = m
-
-    gethead=keys.get("header",False)
-    if gethead:
-        return result, header
-    else:
-        return result
-
-
 class Map(object):
     """
     class to represent a healpix map.
@@ -455,7 +378,49 @@ class Map(object):
 
         self.hpix = HealPix(scheme, nside)
         self.data = numpy.array(array, ndmin=1, copy=False)
-    
+
+    def convert(self, scheme):
+        """
+        get a new Map with the specified scheme
+        """
+        raise RuntimeError("implement convert for Map")
+
+    def __repr__(self):
+        tname=str(type(self))
+        hrep = self.hpix.__repr__()
+        array_repr=self.data.__repr__()
+        rep="""
+%s
+
+%s
+map data:
+%s""" % (tname, hrep, array_repr)
+        return rep
+
+
+class DensityMap(Map):
+    """
+    A healpix Map that represents a spatial density.  Provides
+    additional methods beyond Map.
+
+    The scaling of the map is generally arbitrary, e.g. it could be
+    on [0,1].
+
+    extra methods beyond Map
+    ------------------------
+    quad_check:
+        Check quadrants around the specified point.  Only makes sens if the map
+        is a weight map (or Neffective, etc)
+    genrand_eq:
+        generate random ra,dec points
+    """
+
+    def convert(self, scheme):
+        """
+        get a new DensityMap with the specified scheme
+        """
+        raise RuntimeError("implement convert for DensityMap")
+
     def quad_check(self,
                    ra=None, dec=None,
                    theta=None, phi=None,
@@ -564,20 +529,6 @@ class Map(object):
                     maskflags |= 1<<(ipair+1)
 
         return maskflags
-
-    def __getitem__(self, args):
-        return self.data[args]
-
-    def __repr__(self):
-        hrep = self.hpix.__repr__()
-        array_repr=self.data.__repr__()
-        rep="""
-healpix Map
-
-%s
-map data:
-%s""" % (hrep, array_repr)
-        return rep
 
 def get_scheme_string(scheme):
     """
