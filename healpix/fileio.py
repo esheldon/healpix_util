@@ -260,7 +260,7 @@ def read_density_maps(filename, **keys):
 
     if header=True is specified, a tuple (maps, header) is returned
     """
-    res=read_maps(filename, column=column, **keys)
+    res=read_maps(filename, **keys)
     if isinstance(res,tuple):
         map_dict,header=res
     else:

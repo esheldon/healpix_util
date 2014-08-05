@@ -385,6 +385,20 @@ class Map(object):
         """
         raise RuntimeError("implement convert for Map")
 
+    def get_scheme(self):
+        """
+        get the scheme used in the map
+        """
+        return self.hpix.scheme
+    def get_nside(self):
+        """
+        get the nside used in the map
+        """
+        return self.hpix.nside
+
+    scheme = property(get_scheme,doc="get the healpix scheme name")
+    nside = property(get_nside,doc="get the resolution")
+
     def __repr__(self):
         tname=str(type(self))
         hrep = self.hpix.__repr__()
