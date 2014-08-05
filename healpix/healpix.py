@@ -32,6 +32,11 @@ from . import coords
 
 RING=1
 NEST=2
+POINT_OK=1<<0
+QUAD12_OK=1<<1
+QUAD23_OK=1<<2
+QUAD34_OK=1<<3
+QUAD41_OK=1<<4
 
 class HealPix(_healpix.HealPix):
     """
@@ -456,12 +461,61 @@ class Map(object):
                    theta=None, phi=None,
                    radius=None,
                    inclusive=False,
-                   pmin=0.95):
+                   pmin=0.95,
+                   verbose=False):
         """
-        Check quadrants around the specified point.
+        Check quadrants around the specified point.  Only makes sens if the map
+        is a weight map (or Neffective, etc)
+
+        parameters
+        ----------
+        Send either
+            ra=,dec=,radius= in degrees
+        or
+            theta=,phi=,radius in radians
+
+        parameters
+        ----------
+        Either of the following set of keywords
+
+        ra=,dec=,radius=: scalars
+            equatorial coordinates and radius in degrees
+        theta=,phi=,radius=: scalars
+            angular coordinates and radius in radians
+
+        inclusive: bool
+            If False, include only pixels whose centers are within the disc.
+            If True, include any pixels that intersect the disc
+
+            Default is False
+        verbose: bool
+            If True, print some info about each quadrant
+
+        returns
+        -------
+        maskflags: scalar 
+            bitmask describing the point
+
+            2**0: set if central point has weight > 0
+            2**1: set if quadrants 1+2 area good pair
+            2**2: set if quadrants 2+3 area good pair
+            2**3: set if quadrants 3+4 area good pair
+            2**4: set if quadrants 4+1 area good pair
         """
 
         hpix=self.hpix
+
+        maskflags=0
+
+        # check central point
+        pixnum = hpix.eq2pix(ra,dec)
+        weight = self.data[pixnum]
+        if weight <= 0.0:
+            return maskflags
+
+        # mark central point as OK
+        maskflags |= POINT_OK
+
         pixnums = hpix.query_disc(ra=ra,
                                   dec=dec,
                                   theta=theta,
@@ -469,14 +523,47 @@ class Map(object):
                                   radius=radius,
                                   inclusive=inclusive)
 
+
         # the "weights" from our map.
-        weights = self.data[pixnums]
-        wmax = weights.max()
+        # can remove clip later?
+        weights = self.data[pixnums].clip(min=0.0, max=None)
 
-        wsum_norm=weights.sum()/wmax/pixnums.size
+        # location of center of each pixel
+        rapix,decpix=hpix.pix2eq(pixnums)
 
-        ra,dec=hpix.pix2eq(pixnums)
-        #print("wsum norm:",wsum_norm)
+        # quadrants around central point for each pixel
+        quadrants = coords.get_quadrant_eq(ra,dec,rapix,decpix)
+
+        count=numpy.zeros(4,dtype='i8')
+        wtmax=numpy.zeros(4)
+        wsum=numpy.zeros(4)
+
+        for i in xrange(4):
+            quad=i+1
+            w,=numpy.where(quadrants == quad)
+            if w.size > 0:
+                wts = weights[w]
+
+                count[i] = w.size
+                wtmax[i] = wts.max()
+                wsum[i] = wts.sum()
+
+        for ipair in xrange(4):
+            ifirst = ipair % 4
+            isec   = (ipair+1) % 4
+
+            wtmax1=wtmax[ifirst]
+            wtmax2=wtmax[isec]
+            if wtmax1 > 0. and wtmax2 > 0.:
+                wtmax12 = max(wtmax1,wtmax2)
+                fm1 = wsum[ifirst]/wtmax12/count[ifirst]
+                fm2 = wsum[isec]/wtmax12/count[isec]
+                if verbose:
+                    print(ifirst+1,isec+1,fm1,fm2)
+                if fm1 > pmin and fm2 > pmin:
+                    maskflags |= 1<<(ipair+1)
+
+        return maskflags
 
     def __getitem__(self, args):
         return self.data[args]
