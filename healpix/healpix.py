@@ -243,6 +243,9 @@ class HealPix(_healpix.HealPix):
         """
         get pixels that are contained within or intersect the disc
 
+        hpix.query_disc(ra,dec,radius_degrees)
+        hpix.query_disc(theta,phi,radius_degrees,system='ang')
+
         parameters
         ----------
         coord1: scalar
@@ -374,10 +377,9 @@ class Map(object):
 
     methods
     -------
-    get_mapval(coord1, coord2, system=):
-        Get the value of the map at the given coordinates, ra,dec if
-        system=='eq' theta,phi if system=='ang'
-    convert(scheme):
+    get_mapval()
+        Get the value of the map at the given coordinates
+    convert()
         convert the map to the specified scheme.  If the current map is already
         in the specified scheme, no copy of the underlying data is made
     """
@@ -395,12 +397,12 @@ class Map(object):
 
         parameters
         ----------
-        coord1: scalar
-            If system=='eq' this is ra degrees
-            If system=='ang' this is theta radians
-        coord2: scalar
-            If system=='eq' this is dec degrees
-            If system=='ang' this is phi radians
+        coord1: scalar or array
+            If system=='eq' this is ra in degrees
+            If system=='ang' this is theta in radians
+        coord2: scalar or array
+            If system=='eq' this is dec in degrees
+            If system=='ang' this is phi in radians
 
         system: string
             'eq' for equatorial ra,dec in degrees
@@ -519,10 +521,10 @@ class DensityMap(Map):
 
         parameters
         ----------
-        coord1: scalar
+        coord1: scalar or array
             If system=='eq' this is ra degrees
             If system=='ang' this is theta radians
-        coord2: scalar
+        coord2: scalar or array
             If system=='eq' this is dec degrees
             If system=='ang' this is phi radians
 

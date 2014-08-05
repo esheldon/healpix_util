@@ -11,6 +11,8 @@ ang2xyz:
     Convert angular theta,phi in radians to x,y,z on the unit sphere
 randsphere:
     generate random points on the unit sphere
+randcap:
+    generate random points in a spherical cap
 
 constants
 ---------
@@ -19,6 +21,7 @@ SYSTEM_ANG=1
 SYSTEM_EQ=2
     equatorial ra,dec system in degrees
 """
+
 import numpy
 from . import _healpix
 
@@ -296,7 +299,7 @@ def randsphere_ang(num, system='eq'):
 
     return theta, phi
 
-def randcap(nrand, ang1, ang2, rad, system='eq', get_radius=False):
+def randcap(nrand, coord1, coord2, radius, system='eq', get_radius=False):
     """
     Generate random equatorial ra,ec points in a sherical cap
 
@@ -304,17 +307,47 @@ def randcap(nrand, ang1, ang2, rad, system='eq', get_radius=False):
     ----------
     nrand:
         The number of random points
-    ,dec:
-        The center of the cap in degrees.  The ra should be within [0,360) and
-        dec from [-90,90]
-    rad:
-        radius of the cap, degrees
+    coord1: scalar
+        If system=='eq' this is ra in degrees
+        If system=='ang' this is theta in radians
+    coord2: scalar
+        If system=='eq' this is dec in degrees
+        If system=='ang' this is dec in radians
+    radius:
+        radius of disc
+        If system=='eq' this is in degrees
+        If system=='ang' this is in radians
+
+    system: string
+        'eq' for equatorial ra,dec in degrees
+        'ang' for angular theta,phi in radians
 
     get_radius: bool, optional
         if true, return radius of each point in radians
     """
-    pass
+    if system=='eq':
+        res=randcap_eq(nrand, coord1, coord2, radius, get_radius=get_radius)
+    elif system=='ang':
+        ra,dec=ang2eq(coord1,coord2)
+        radius_degrees=numpy.rad2deg(radius)
+        res=randcap_eq(nrand, ra, dec, radius_degrees, get_radius=get_radius)
 
+        if get_radius:
+            rarand,decrand,radout_degrees=res
+            radout_radians=numpy.deg2rad(radout_degrees)
+        else:
+            rarand,decrand=res
+
+        theta,phi=eq2ang(rarand,decrand)
+
+        if get_radius:
+            res=theta,phi,radout_radians
+        else:
+            res=theta,phi
+    else:
+        raise ValueError("bad system: '%s'" % system)
+
+    return res
 
 def randcap_eq(nrand, ra, dec, rad, get_radius=False):
     """
@@ -387,4 +420,140 @@ def randcap_eq(nrand, ra, dec, rad, get_radius=False):
     else:
         return rand_ra, rand_dec
 
+class Points(object):
+    """
+    A wrapper class for coordinates in various systems
 
+    parameters
+    ----------
+    There are three conventions
+
+    Points(ra=ra,dec=dec)
+        ra,dec in degrees
+    Points(theta=theta,phi=phi0
+        theta,phi in radians
+
+    example
+    -------
+    pts=Points(ra=ra, dec=dec)
+
+    # access as attributes or by name
+    pts.ra[35]
+    pts.dec[25:88]
+    # theta and phi would be generated the first time you try to access them
+    pts.theta[55]
+    pts.phi[ [3,4,5 ]]
+
+    pts['ra'][35]
+    pts['dec'][25:88]
+    pts['theta'][55]
+    pts['phi'][ [3,4,5 ]]
+    """
+    def __init__(self,
+                 ra=None,
+                 dec=None,
+                 theta=None,
+                 phi=None):
+                 
+        self.clear()
+
+        if ra is not None and dec is not None:
+            self.set_eq(ra,dec)
+        elif theta is not None and phi is not None:
+            self.set_ang(theta,phi)
+
+    def clear(self):
+        """
+        set all coords to None
+        """
+        self._ra=None
+        self._dec=None
+        self._theta=None
+        self._phi=None
+
+    def set_eq(self, ra, dec):
+        """
+        set equatorial ra,dec in degrees
+
+        parameters
+        ----------
+        ra: array or scalar
+            right ascension in degrees
+        dec: array or scalar
+            declination in degrees
+        """
+
+        self.clear()
+        self._ra  = numpy.array(ra,  dtype='f8', ndmin=1, copy=False)
+        self._dec = numpy.array(dec, dtype='f8', ndmin=1, copy=False)
+        self._defsystem="eq"
+
+    def set_ang(self, theta, dec):
+        """
+        set angular theta,dec in radians
+
+        parameters
+        ----------
+        theta: array or scalar
+            angular theta in radians
+        phi: array or scalar
+            angular phi in radians
+        """
+
+        self.clear()
+        self._theta = numpy.array(theta, dtype='f8',ndmin=1, copy=False)
+        self._phi   = numpy.array(phi,   dtype='f8',ndmin=1, copy=False)
+        self._defsystem="ang"
+
+    def get_ra(self):
+        """
+        get a reference to the ra data
+        """
+        if self._ra is None:
+            # the ang system must have been the initial
+            self._ra, self._dec = ang2eq(self._theta, self._phi)
+        return self._ra
+
+    def get_dec(self):
+        """
+        get a reference to the dec data
+        """
+        if self._dec is None:
+            # the ang system must have been the initial
+            self._ra, self._dec = ang2eq(self._theta, self._phi)
+        return self._dec
+
+    def get_theta(self):
+        """
+        get a reference to the theta data
+        """
+        if self._theta is None:
+            # the ang system must have been the initial
+            self._theta, self._phi= eq2ang(self._ra, self._dec)
+        return self._theta
+
+    def get_phi(self):
+        """
+        get a reference to the phi data
+        """
+        if self._phi is None:
+            # the ang system must have been the initial
+            self._theta, self._phi= eq2ang(self._ra, self._dec)
+        return self._phi
+
+    ra = property(get_ra)
+    dec = property(get_dec)
+    theta = property(get_theta)
+    phi = property(get_phi)
+
+    def __getitem__(self, arg):
+        if arg=='ra':
+            return self.get_ra()
+        elif arg=='dec':
+            return self.get_dec()
+        elif arg=='theta':
+            return self.get_theta()
+        elif arg=='phi':
+            return self.get_phi()
+        else:
+            raise IndexError("no such item '%s'" % arg)
