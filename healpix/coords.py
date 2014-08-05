@@ -202,7 +202,7 @@ def get_quadrant_eq(ra_cen, dec_cen, ra, dec):
     return quadrant
 
 
-def randsphere(num, system='eq'):
+def randsphere(num, system='eq', **keys):
     """
     Generate random points on the sphere
 
@@ -221,7 +221,7 @@ def randsphere(num, system='eq'):
     """
 
     if system=='eq':
-        return randsphere_eq(num)
+        return randsphere_eq(num, **keys)
     elif system=='ang':
         return randsphere_ang(num)
     elif system=='xyz':
@@ -230,7 +230,7 @@ def randsphere(num, system='eq'):
     else:
         raise ValueError("bad system: '%s'" % sytem)
 
-def randsphere_eq(num):
+def randsphere_eq(num, **keys):
     """
     Generate random equatorial ra,dec points on the sphere
 
@@ -238,37 +238,50 @@ def randsphere_eq(num):
     ----------
     num: integer 
         The number of randoms to generate
+    ra_range: 2-element sequence
+        [min,max] range in which to generate ra
+    dec_range: 2-element sequence
+        [min,max] range in which to generate dec
 
     output
     ------
     ra,dec: tuple of arrays
         the random points
     """
+    from numpy import cos, deg2rad, rad2deg, arccos
+
+    ra_range=keys.get('ra_range',None)
+    dec_range=keys.get('dec_range',None)
+
+    ra_range = _check_range(ra_range, [0.0,360.0])
+    dec_range = _check_range(dec_range, [-90.0,90.0])
 
     ra = numpy.random.random(num)
-    ra *= 360.0
+    ra *= (ra_range[1]-ra_range[0])
+    if ra_range[0] > 0:
+        ra += ra_range[0]
 
-    # number [0,1)
+    # number [-1,1)
+    cosdec_min = cos(deg2rad(90.0+dec_range[0]))
+    cosdec_max = cos(deg2rad(90.0+dec_range[1]))
     v = numpy.random.random(num)
-    # [0,2)
-    v *= 2.0
-    # [-1,1)
-    v -= 1.0
+    v *= (cosdec_max-cosdec_min)
+    v += cosdec_min
 
+    v.clip(min=-1.0, max=1.0, out=v)
     # Now this generates on [0,pi)
-    dec = numpy.arccos(v)
+    dec = arccos(v)
 
     # convert to degrees
-    numpy.rad2deg(dec,dec)
+    rad2deg(dec,dec)
     # now in range [-90,90.0)
     dec -= 90.0
     
     return ra, dec
 
-def randsphere_ang(num, system='eq'):
+def randsphere_ang(num):
     """
     Generate random angular theta,phi points on the sphere
-
 
     parameters
     ----------
@@ -298,6 +311,18 @@ def randsphere_ang(num, system='eq'):
     theta = numpy.arccos(v)
 
     return theta, phi
+
+def _check_range(rng, allowed):
+    if rng is None:
+        rng = allowed
+    else:
+        if not hasattr(rng,'__len__'):
+            raise ValueError("range object does not have len() method")
+
+        if rng[0] < allowed[0] or rng[1] > allowed[1]:
+            raise ValueError("lon_range should be within [%s,%s]" % allowed)
+    return rng
+
 
 def randcap(nrand, coord1, coord2, radius, system='eq', get_radius=False):
     """

@@ -504,6 +504,13 @@ class DensityMap(Map):
 
     def __init__(self, scheme, array):
         super(DensityMap,self).__init__(scheme, array)
+
+        # do not allow values less than zero
+        w,=numpy.where(self.data < 0.0)
+        if w.size > 0:
+            raise ValueError("found %d values < 0 in density map "
+                             "density maps must be positive")
+
         self._maxval=self.data.max()
         self._maxval_inv=1.0/self._maxval
 
@@ -539,8 +546,9 @@ class DensityMap(Map):
         the weight for the given coordinates.  This is equivalent
         to map.get_mapval()/map.data.max()
         """
-        density=self.get_mapval(coord1, coord2, system=system)
-        density *= self._maxval_inv
+        res = self.get_mapval(coord1, coord2, system=system)
+        res *= self._maxval_inv
+        return res
 
     def check_quad(self, ra, dec, radius,
                    system='eq',
@@ -610,9 +618,8 @@ class DensityMap(Map):
                                   inclusive=inclusive)
 
 
-        # the "weights" from our map.
-        # can remove clip later?
-        weights = self.data[pixnums].clip(min=0.0, max=None)
+        # the "weights" from our map (actually the raw values).
+        weights = self.data[pixnums]
 
         # location of center of each pixel
         rapix,decpix=hpix.pix2eq(pixnums)
@@ -650,6 +657,51 @@ class DensityMap(Map):
                     maskflags |= 1<<(ipair+1)
 
         return maskflags
+
+    def genrand(self, nrand, system='eq', **keys):
+        """
+        generate random points from the map
+
+        the points will follow the density in the map
+
+        parameters
+        ----------
+        nrand: int
+            number of randoms
+        system: string
+            'eq' for equatorial ra,dec in degrees
+            'ang' for angular theta,phi in radians
+        **keys:
+            ra_range=, dec_range= to limit range of randoms
+                in ra,dec system
+            theta_range=, phi_range= to limit range of randoms
+                in theta,phi system
+        """
+        from .coords import randsphere
+
+        coord1=numpy.zeros(nrand,dtype='f8')
+        coord2=numpy.zeros(nrand,dtype='f8')
+
+        ngood=0
+        nleft=nrand
+        while nleft > 0:
+            t1,t2=randsphere(nleft, system=system, **keys)
+
+            weights=self.get_weight(t1,t2,system=system)
+
+            # keep with probability 
+            ru = numpy.random.random(nleft)
+
+            w,=numpy.where( ru < weights )
+            if w.size > 0:
+                beg=ngood
+                end=ngood+w.size
+                coord1[beg:end] = t1[w]
+                coord2[beg:end] = t2[w]
+
+                ngood += w.size
+                nleft -= w.size
+        return coord1, coord2
 
 def get_scheme_string(scheme):
     """
