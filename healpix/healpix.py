@@ -374,6 +374,9 @@ class Map(object):
 
     methods
     -------
+    get_mapval(coord1, coord2, system=):
+        Get the value of the map at the given coordinates, ra,dec if
+        system=='eq' theta,phi if system=='ang'
     convert(scheme):
         convert the map to the specified scheme.  If the current map is already
         in the specified scheme, no copy of the underlying data is made
@@ -385,6 +388,38 @@ class Map(object):
 
         self.hpix = HealPix(scheme, nside)
         self.data = numpy.array(array, ndmin=1, copy=False)
+
+    def get_mapval(self, coord1, coord2, system='eq'):
+        """
+        get the value of the map for the input coordinates
+
+        parameters
+        ----------
+        coord1: scalar
+            If system=='eq' this is ra degrees
+            If system=='ang' this is theta radians
+        coord2: scalar
+            If system=='eq' this is dec degrees
+            If system=='ang' this is phi radians
+
+        system: string
+            'eq' for equatorial ra,dec in degrees
+            'ang' for angular theta,phi in radians
+
+            default 'eq'
+
+        returns
+        -------
+        the value of the map at the given coordinates
+        """
+        if system=='eq':
+            pixnums=self.hpix.eq2pix(coord1, coord2)
+        elif system=='ang':
+            pixnums=self.hpix.ang2pix(coord1, coord2)
+        else:
+            raise ValueError("bad system: '%s'" % system)
+
+        return self.data[pixnums]
 
     def convert(self, scheme):
         """
@@ -442,10 +477,13 @@ class DensityMap(Map):
 
     extra methods beyond Map
     ------------------------
+    get_weight:
+        get the weight for the input coordinates, equivalent to
+        map.get_mapval()/map.data.max()
     check_quad:
         Check quadrants around the specified point.  Only makes sens if the map
         is a weight map (or Neffective, etc)
-    genrand_eq:
+    genrand:
         generate random ra,dec points
 
     examples
@@ -465,6 +503,7 @@ class DensityMap(Map):
     def __init__(self, scheme, array):
         super(DensityMap,self).__init__(scheme, array)
         self._maxval=self.data.max()
+        self._maxval_inv=1.0/self._maxval
 
     def convert(self, scheme):
         """
@@ -472,14 +511,11 @@ class DensityMap(Map):
         """
         raise RuntimeError("implement convert for DensityMap")
 
-    def check_quad(self, coord1, coord2, radius,
-                   system='eq',
-                   inclusive=False,
-                   pmin=0.95,
-                   verbose=False):
+    def get_weight(self, coord1, coord2, system='eq'):
         """
-        Check quadrants around the specified point.  Only makes sens if the map
-        is a weight map (or Neffective, etc)
+        get the weight for the input coordinates
+
+        this is equivalent to map.get_mapval()/map.data.max()
 
         parameters
         ----------
@@ -489,10 +525,40 @@ class DensityMap(Map):
         coord2: scalar
             If system=='eq' this is dec degrees
             If system=='ang' this is phi radians
+
+        system: string
+            'eq' for equatorial ra,dec in degrees
+            'ang' for angular theta,phi in radians
+
+            default 'eq'
+
+        returns
+        -------
+        the weight for the given coordinates.  This is equivalent
+        to map.get_mapval()/map.data.max()
+        """
+        density=self.get_mapval(coord1, coord2, system=system)
+        density *= self._maxval_inv
+
+    def check_quad(self, ra, dec, radius,
+                   system='eq',
+                   inclusive=False,
+                   pmin=0.95,
+                   verbose=False):
+        """
+        Check quadrants around the specified point.  Only makes sens if the map
+        is a weight map (or Neffective, etc)
+
+        currently works in ra,dec only
+
+        parameters
+        ----------
+        ra: scalar
+            right ascension in degrees
+        dec: scalar
+            declination in degrees
         radius: scalar
-            radius of disc
-            If system=='eq' this is in degrees
-            If system=='ang' this is in radians
+            radius in degrees
         pmin: scalar
             Minimum relative "masked fraction" for quadrants to
             qualify as "good".
@@ -502,11 +568,6 @@ class DensityMap(Map):
             but max weight is determined from the two adjacent
             quadrants that are being checked.
 
-        system: string
-            'eq' for equatorial ra,dec in degrees
-            'ang' for angular theta,phi in radians
-
-            default 'eq'
         inclusive: bool
             If False, include only pixels whose centers are within the disc.
             If True, include any pixels that intersect the disc
@@ -542,8 +603,8 @@ class DensityMap(Map):
         # mark central point as OK
         maskflags |= POINT_OK
 
-        pixnums = hpix.query_disc(coord1, coord2, radius,
-                                  system=system,
+        pixnums = hpix.query_disc(ra, dec, radius,
+                                  system='eq',
                                   inclusive=inclusive)
 
 
@@ -551,7 +612,6 @@ class DensityMap(Map):
         # can remove clip later?
         weights = self.data[pixnums].clip(min=0.0, max=None)
 
-        raise RuntimeError("fix to work with both systems")
         # location of center of each pixel
         rapix,decpix=hpix.pix2eq(pixnums)
 
