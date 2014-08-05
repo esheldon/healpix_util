@@ -1,14 +1,16 @@
 """
 functions
 ---------
-eq2ang(ra, dec):
+eq2ang:
     convert equatorial ra,dec in degrees to angular theta, phi in radians
-ang2eq(theta, phi):
+ang2eq:
     convert angular theta, phi in radians to equatorial ra,dec in degrees
-eq2xyz(ra, dec):
+eq2xyz:
     Convert equatorial ra,dec in degrees to x,y,z on the unit sphere
-ang2xyz(theta, phi):
+ang2xyz:
     Convert angular theta,phi in radians to x,y,z on the unit sphere
+randsphere:
+    generate random points on the unit sphere
 
 constants
 ---------
@@ -27,9 +29,6 @@ def eq2ang(ra, dec):
     """
     convert equatorial ra,dec in degrees to angular theta, phi in radians
 
-    theta = pi/2-dec*D2R
-    phi = ra*D2R
-
     parameters
     ----------
     ra: scalar or array
@@ -40,9 +39,9 @@ def eq2ang(ra, dec):
     returns
     -------
     theta: scalar or array
-        pi/2-dec*D2R
+        pi/2-dec*D2R # in [0,pi]
     phi: scalar or array
-        phi = ra*D2R
+        phi = ra*D2R # in [0,2*pi]
     """
     theta = 0.5*numpy.pi - numpy.deg2rad(dec)
     phi = numpy.deg2rad(ra)
@@ -53,8 +52,8 @@ def ang2eq(theta, phi):
     """
     convert angular theta, phi in radians to equatorial ra,dec in degrees
 
-    ra = phi*R2D
-    dec = (pi/2-theta)*R2D
+    ra = phi*R2D            # [0,360]
+    dec = (pi/2-theta)*R2D  # [-90,90]
 
     parameters
     ----------
@@ -66,9 +65,9 @@ def ang2eq(theta, phi):
     returns
     -------
     ra: scalar or array
-        phi*R2D
+        phi*R2D          # in [0,360]
     dec: scalar or array
-        (pi/2-theta)*R2D
+        (pi/2-theta)*R2D # in [-90,90]
     """
 
     ra = numpy.rad2deg(phi)
@@ -200,9 +199,37 @@ def get_quadrant_eq(ra_cen, dec_cen, ra, dec):
     return quadrant
 
 
-def randsphere(num):
+def randsphere(num, system='eq'):
     """
     Generate random points on the sphere
+
+    parameters
+    ----------
+    num: integer 
+        The number of randoms to generate
+    system: string
+        'eq' for equatorial ra,dec in degrees
+        'ang' for angular theta,phi in radians
+        'xyz' for x,y,z on the unit sphere
+    output
+    ------
+    ra,dec: tuple of arrays
+        the random points
+    """
+
+    if system=='eq':
+        return randsphere_eq(num)
+    elif system=='ang':
+        return randsphere_ang(num)
+    elif system=='xyz':
+        theta,phi=randsphere_ang(num)
+        return ang2xyz(theta,phi)
+    else:
+        raise ValueError("bad system: '%s'" % sytem)
+
+def randsphere_eq(num):
+    """
+    Generate random equatorial ra,dec points on the sphere
 
     parameters
     ----------
@@ -235,13 +262,66 @@ def randsphere(num):
     
     return ra, dec
 
-def randcap(nrand, ra, dec, rad, get_radius=False):
+def randsphere_ang(num, system='eq'):
     """
-    Generate random points in a sherical cap
+    Generate random angular theta,phi points on the sphere
+
 
     parameters
     ----------
+    num: integer 
+        The number of randoms to generate
 
+    output
+    ------
+    theta,phi: tuple of arrays
+        the random points
+
+        theta in [0,pi]
+        phi   in [0,2*pi]
+    """
+
+    phi = numpy.random.random(num)
+    phi *= 2.0*numpy.pi
+
+    # number [0,1)
+    v = numpy.random.random(num)
+    # [0,2)
+    v *= 2.0
+    # [-1,1)
+    v -= 1.0
+
+    # Now this generates on [0,pi)
+    theta = numpy.arccos(v)
+
+    return theta, phi
+
+def randcap(nrand, ang1, ang2, rad, system='eq', get_radius=False):
+    """
+    Generate random equatorial ra,ec points in a sherical cap
+
+    parameters
+    ----------
+    nrand:
+        The number of random points
+    ,dec:
+        The center of the cap in degrees.  The ra should be within [0,360) and
+        dec from [-90,90]
+    rad:
+        radius of the cap, degrees
+
+    get_radius: bool, optional
+        if true, return radius of each point in radians
+    """
+    pass
+
+
+def randcap_eq(nrand, ra, dec, rad, get_radius=False):
+    """
+    Generate random equatorial ra,ec points in a sherical cap
+
+    parameters
+    ----------
     nrand:
         The number of random points
     ra,dec:

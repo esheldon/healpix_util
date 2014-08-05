@@ -3,10 +3,8 @@ classes
 -------
 HealPix:
     class to work with healpixels
-
 Map:
     class to contain a healpix map
-
 DensityMap:
     class to contain a density healpix map
 
@@ -87,15 +85,15 @@ class HealPix(_healpix.HealPix):
     nside=4096
     hp=HealPix(scheme,nside)
 
-    pixnums=hp.eq2pix(ra, dec)
+    eq2pix:
         Get pixnums for the input equatorial ra,dec in degrees
-    pixnums=hp.ang2pix(ra, dec) 
+    ang2pix:
         Get pixnums for the input angular theta,phi in radians
-    ra,dec=hp.pix2eq(pixnums)
+    pix2eq:
         Get equatorial ra,dec in degrees for the input pixels
-    theta,phi=hp.pix2ang(pixnums)
+    pix2ang:
         Get angular theta,phi in radians for the input pixels
-    pixnums = hp.query_disc(ra=,dec=,theta=,phi=,radius=,inclusive=)
+    query_disc:
         Get ids of pixels whose centers are contained with the disc
         or that intersect the disc (inclusive=True)
 
@@ -241,30 +239,27 @@ class HealPix(_healpix.HealPix):
             phi=phi[0]
         return theta, phi
 
-    def query_disc(self,
-                   ra=None,
-                   dec=None,
-                   theta=None,
-                   phi=None,
-                   radius=None,
-                   inclusive=False):
+    def query_disc(self, coord1, coord2, radius, system='eq', inclusive=False):
         """
         get pixels that are contained within or intersect the disc
 
-        Send either
-            ra=,dec=,radius= in degrees
-        or
-            theta=,phi=,radius in radians
-
         parameters
         ----------
-        Either of the following set of keywords
+        coord1: scalar
+            If system=='eq' this is ra degrees
+            If system=='ang' this is theta radians
+        coord2: scalar
+            If system=='eq' this is dec degrees
+            If system=='ang' this is phi radians
+        radius: scalar
+            radius of disc
+            If system=='eq' this is in degrees
+            If system=='ang' this is in radians
+        system: string
+            'eq' for equatorial ra,dec in degrees
+            'ang' for angular theta,phi in radians
 
-        ra=,dec=,radius=: scalars
-            equatorial coordinates and radius in degrees
-        theta=,phi=,radius=: scalars
-            angular coordinates and radius in radians
-
+            default 'eq'
         inclusive: bool
             If False, include only pixels whose centers are within the disc.
             If True, include any pixels that intersect the disc
@@ -275,6 +270,16 @@ class HealPix(_healpix.HealPix):
         -------
         pixnums: array
             Array of pixel numbers that are contained or intersect the disc
+
+        examples
+        --------
+        import healpix
+        hpix = healpix.HealPix("ring", 4096)
+
+        ra=200.0
+        dec=0.0
+        radius=1.0
+        pixnums=hpix.query_disc(ra, dec, radius)
         """
 
         if not inclusive:
@@ -285,20 +290,20 @@ class HealPix(_healpix.HealPix):
         if radius is None:
             raise ValueError("send radius=")
 
-        if ra is not None and dec is not None:
-            pixnums=super(HealPix,self)._query_disc(ra,
-                                                    dec,
+        if system=='eq':
+            pixnums=super(HealPix,self)._query_disc(coord1,
+                                                    coord2,
                                                     radius,
                                                     coords.SYSTEM_EQ,
                                                     inclusive_int)
-        elif theta is not None and phi is not None:
-            pixnums=super(HealPix,self)._query_disc(theta,
-                                                    phi,
+        elif system=='ang':
+            pixnums=super(HealPix,self)._query_disc(coord1,
+                                                    coord2,
                                                     radius,
                                                     coords.SYSTEM_ANG,
                                                     inclusive_int)
         else:
-            raise ValueError("send ra=,dec= or theta=,phi=")
+            raise ValueError("system should be 'eq' or 'ang'")
 
         return pixnums
 
@@ -330,10 +335,12 @@ class Map(object):
     .hpix    # A HealPix object, the pixel specification
     .data    # the healpix map as a numpy array.  .data.size is 
              # the number of pixels
+    .scheme  # the healpix scheme used (gotten from .hpix)
+    .nside   # resolution of healpix map (gotten from .hpix)
 
-    data access
-    -----------
-    # access the .data attribute, which is a numpy array
+    examples
+    --------
+
     m=Map(scheme, array)
     print(m)
 
@@ -414,20 +421,50 @@ map data:
 
 class DensityMap(Map):
     """
-    A healpix Map that represents a spatial density.  Provides
-    additional methods beyond Map.
+    A healpix Map to represent a spatial density.  Provides additional methods
+    beyond Map.
 
-    The scaling of the map is generally arbitrary, e.g. it could be
-    on [0,1].
+    The minimum value in the map should not go below zero.
+
+    The overall scaling of the map does not matter, e.g. it could be on [0,1].
+
+    parameters
+    ----------
+    scheme: string or int
+        if a string is input, the value should be
+            'ring' or 'nest'
+        if an int is input, the value should be
+            healpix.RING or healpix.NEST.
+    array: sequence or array
+        array representing the healpix map data
+
+        the minimum value in the array should not be below zero.
 
     extra methods beyond Map
     ------------------------
-    quad_check:
+    check_quad:
         Check quadrants around the specified point.  Only makes sens if the map
         is a weight map (or Neffective, etc)
     genrand_eq:
         generate random ra,dec points
+
+    examples
+    --------
+    See docs for Map for basic examples.
+
+    m=DensityMap(scheme, array)
+
+    # generate random points according to the map
+    ra,dec=m.genrand(10000)
+    theta,phi=m.genrand(10000,system='ang')
+
+    # check quadrants around the specified center
+    maskflags=m.check_quad(ra=200., dec=0., radius=1.0)
     """
+
+    def __init__(self, scheme, array):
+        super(DensityMap,self).__init__(scheme, array)
+        self._maxval=self.data.max()
 
     def convert(self, scheme):
         """
@@ -435,10 +472,8 @@ class DensityMap(Map):
         """
         raise RuntimeError("implement convert for DensityMap")
 
-    def quad_check(self,
-                   ra=None, dec=None,
-                   theta=None, phi=None,
-                   radius=None,
+    def check_quad(self, coord1, coord2, radius,
+                   system='eq',
                    inclusive=False,
                    pmin=0.95,
                    verbose=False):
@@ -448,25 +483,37 @@ class DensityMap(Map):
 
         parameters
         ----------
-        Send either
-            ra=,dec=,radius= in degrees
-        or
-            theta=,phi=,radius in radians
+        coord1: scalar
+            If system=='eq' this is ra degrees
+            If system=='ang' this is theta radians
+        coord2: scalar
+            If system=='eq' this is dec degrees
+            If system=='ang' this is phi radians
+        radius: scalar
+            radius of disc
+            If system=='eq' this is in degrees
+            If system=='ang' this is in radians
+        pmin: scalar
+            Minimum relative "masked fraction" for quadrants to
+            qualify as "good".
+            
+            This is essentially 
+                weights.sum()/weights.max()/npoints
+            but max weight is determined from the two adjacent
+            quadrants that are being checked.
 
-        parameters
-        ----------
-        Either of the following set of keywords
+        system: string
+            'eq' for equatorial ra,dec in degrees
+            'ang' for angular theta,phi in radians
 
-        ra=,dec=,radius=: scalars
-            equatorial coordinates and radius in degrees
-        theta=,phi=,radius=: scalars
-            angular coordinates and radius in radians
-
+            default 'eq'
         inclusive: bool
             If False, include only pixels whose centers are within the disc.
             If True, include any pixels that intersect the disc
 
             Default is False
+
+
         verbose: bool
             If True, print some info about each quadrant
 
@@ -495,11 +542,8 @@ class DensityMap(Map):
         # mark central point as OK
         maskflags |= POINT_OK
 
-        pixnums = hpix.query_disc(ra=ra,
-                                  dec=dec,
-                                  theta=theta,
-                                  phi=phi,
-                                  radius=radius,
+        pixnums = hpix.query_disc(coord1, coord2, radius,
+                                  system=system,
                                   inclusive=inclusive)
 
 
@@ -507,6 +551,7 @@ class DensityMap(Map):
         # can remove clip later?
         weights = self.data[pixnums].clip(min=0.0, max=None)
 
+        raise RuntimeError("fix to work with both systems")
         # location of center of each pixel
         rapix,decpix=hpix.pix2eq(pixnums)
 
