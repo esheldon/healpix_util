@@ -12,7 +12,7 @@ read_density_maps:
 """
 from __future__ import print_function
 import numpy
-from .healpix import HealPix, Map, DensityMap
+from .healpix import HealPix, Map, DensityMap, get_scheme_string
 
 def read_map(filename, column=0, **keys):
     """
