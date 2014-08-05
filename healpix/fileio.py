@@ -38,7 +38,6 @@ def read_map(filename, column=0, **keys):
     **keys:
         other keywords for the fits reading, such as 
             ext= (default 1)
-            columns= (default is to read all columns)
             header=True to return the header
         See the fitsio documentation for more details
 
@@ -185,8 +184,8 @@ def read_density_map(filename, column=0, **keys):
     read a density healpix map from the specified file
 
     The difference between a DensityMap and Map is a density map represents a
-    density, possibly arbitrarily scaled.  A normal map can represent any field
-    on the sky.
+    density, possibly arbitrarily scaled.  The DensityMap provides additional
+    methods.
 
     parameters
     ----------
@@ -205,7 +204,6 @@ def read_density_map(filename, column=0, **keys):
     **keys:
         other keywords for the fits reading, such as 
             ext= (default 1)
-            columns= (default is to read all columns)
             header=True to return the header
         See the fitsio documentation for more details
 
@@ -232,8 +230,8 @@ def read_density_maps(filename, **keys):
     read multiple density healpix maps from the specified file
 
     The difference between a DensityMap and Map is a density map represents a
-    density, possibly arbitrarily scaled.  A normal map can represent any field
-    on the sky.
+    density, possibly arbitrarily scaled.  The DensityMap provides additional
+    methods.
 
     parameters
     ----------
