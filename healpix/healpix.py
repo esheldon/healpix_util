@@ -290,6 +290,7 @@ class HealPix(_healpix.HealPix):
     ncap = property(_healpix.HealPix.get_ncap,doc="number of pixels in the northern cap")
     area = property(_healpix.HealPix.get_area,doc="area of a pixel")
 
+
 def read_fits(filename, **keys):
     """
     read healpix map(s) from the specified file
@@ -315,88 +316,10 @@ def read_fits(filename, **keys):
 
     returns
     -------
-    a Map object holding the requested maps.
+    By default, a dict of healpix.Map is returned, keyed by the column names.
     
-    """
-    import fitsio
-
-    scheme = keys.get("scheme",None)
-    if scheme is not None:
-        scheme=get_scheme_string(scheme)
-
-    # ensure None or a sequence, which makes
-    # fitsio return a recarray
-    columns=keys.get('columns',None)
-    if columns is not None:
-        if numpy.isscalar(columns):
-            keys['columns']=[columns]
-
-    with fitsio.FITS(filename) as fits:
-
-        ext=keys.get('ext',1)
-        hdu = fits[ext]
-        if not isinstance(hdu,fitsio.fitslib.TableHDU):
-            raise ValueError("extension %s is not a table" % ext)
-
-        header = hdu.read_header()
-
-        # user may specify columns= here
-        data = hdu.read(**keys)
-
-
-        if 'ordering' in header:
-            scheme_in_file = header['ordering'].strip()
-            scheme_in_file = get_scheme_string(scheme_in_file)
-        else:
-            # we need input from the user
-            if scheme is None:
-                raise ValueError("ORDERING not in header, send scheme= "
-                                 "to specify")
-            scheme_in_file = scheme
-
-        hmap = Map(scheme_in_file, data)
-
-        if scheme is not None and scheme != scheme_in_file:
-            print("converting from scheme '%s' "
-                  "to '%s'" % (scheme_in_file,scheme))
-            hmap = hmap.convert(scheme)
-
-    gethead=keys.get("header",False)
-    if gethead:
-        return hmap, header
-    else:
-        return hmap
-
-def read_fits_old(filename, **keys):
-    """
-    read healpix map(s) from the specified file
-
-    parameters
-    ----------
-    filename: string
-        The fits filename
-    scheme: string or int
-        Optional scheme specification.  If the scheme is not specified
-        in the header as 'ORDERING', then you can specify it with
-        this keyword.
-
-        Also if the specified scheme does not match the ORDERING in the
-        header, the maps will be converted to the requested scheme.
-
-    **keys:
-        other keywords for the fits reading, such as 
-            ext= (default 1)
-            columns= (default is to read all columns)
-            header=True to return the header
-        See the fitsio documentation for more details
-
-    returns
-    -------
-    By default, a dict of healpix.Map is returned, keyed by the map column
-    name.
-    
-    If a single scalar columns= is specified, a single map is returned
-    instead of a list.
+    If a single scalar columns= is specified, a single map is returned instead
+    of a dict
 
     if header=True is specified, a tuple (maps, header) is returned
     """
@@ -538,18 +461,22 @@ class Map(object):
         Check quadrants around the specified point.
         """
 
-        pixnums = self.hpix.query_disc(ra=ra,
-                                       dec=dec,
-                                       theta=theta,
-                                       phi=phi,
-                                       radius=radius,
-                                       inclusive=inclusive)
+        hpix=self.hpix
+        pixnums = hpix.query_disc(ra=ra,
+                                  dec=dec,
+                                  theta=theta,
+                                  phi=phi,
+                                  radius=radius,
+                                  inclusive=inclusive)
+
         # the "weights" from our map.
         weights = self.data[pixnums]
         wmax = weights.max()
 
-        wsum_norm=weights.sum()/wmax
-        print("wsum norm:",wsum_norm)
+        wsum_norm=weights.sum()/wmax/pixnums.size
+
+        ra,dec=hpix.pix2eq(pixnums)
+        #print("wsum norm:",wsum_norm)
 
     def __getitem__(self, args):
         return self.data[args]
