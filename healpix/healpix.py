@@ -10,9 +10,9 @@ DensityMap:
 
 functions
 ---------
-get_scheme_string():
+get_scheme_name():
     Get string form of input scheme specification
-get_scheme_int():
+get_scheme_num():
     Get integer form of input scheme specification
 
 constants
@@ -90,7 +90,7 @@ class HealPix(_healpix.HealPix):
     ----------
     scheme: string or int
         if a string is input, the value should be
-            'ring' or 'nested'
+            'ring' or 'nested' (case insensitive)
         if an int is input, the value should be
             healpix.RING (1) or healpix.NESTED (2)
         
@@ -102,7 +102,7 @@ class HealPix(_healpix.HealPix):
     read-only attributes
     --------------------
     scheme
-    scheme_name
+    scheme_num
     nside
     npix
     ncap
@@ -129,8 +129,8 @@ class HealPix(_healpix.HealPix):
         or that intersect the disc (inclusive=True)
 
     # the following methods are the same as the read only attributes above
-    get_scheme()
-    get_scheme_name()
+    get_scheme()     # scheme name
+    get_scheme_num() # scheme number
     get_nside()
     get_npix()
     get_ncap()
@@ -138,11 +138,11 @@ class HealPix(_healpix.HealPix):
     """
 
     def __init__(self, scheme, nside):
-        scheme_int = get_scheme_int(scheme)
-        if scheme_int != RING:
-            raise ValueError("only ring scheme is currently supported")
+        scheme_num = get_scheme_num(scheme)
+        if scheme_num != RING:
+            print("only ring scheme is fully supported")
 
-        super(HealPix,self).__init__(scheme_int, nside)
+        super(HealPix,self).__init__(scheme_num, nside)
 
     def eq2pix(self, ra, dec):
         """
@@ -358,7 +358,7 @@ class Map(object):
     ----------
     scheme: string or int
         if a string is input, the value should be
-            'ring' or 'nested'
+            'ring' or 'nested' (case insensitive)
         if an int is input, the value should be
             healpix.RING or healpix.NESTED.
     array: sequence or array
@@ -401,16 +401,15 @@ class Map(object):
     print("pixels 200-209:",m.data[200:210])
     print("pixels",indices,":,m.data[indices])
 
-    # convert map to nested
-    nmap = m.convert("nested")
-    # convert map to ring
-    rmap = m.convert("ring")
+    # get a new map converted to the requested scheme
+    hmap = m.convert("nested")
+    hmap = m.convert("ring")
 
     methods
     -------
-    get_mapval()
+    get_mapval:
         Get the value of the map at the given coordinates
-    convert()
+    convert:
         convert the map to the specified scheme.  If the current map is already
         in the specified scheme, no copy of the underlying data is made
     """
@@ -457,14 +456,61 @@ class Map(object):
     def convert(self, scheme):
         """
         get a new Map with the specified scheme
+
+        if the scheme would be unchanged, a reference to the internal map data
+        is used
+
+        parameters
+        ----------
+        scheme: string or int
+            if a string is input, the value should be
+                'ring' or 'nested'
+            if an int is input, the value should be
+                healpix.RING or healpix.NESTED.
+
+        returns
+        -------
+        newmap:
+            A new map with the requested ordering
         """
-        raise RuntimeError("implement convert for Map")
+
+        newdata = self._get_converted_data(scheme)
+        return Map(scheme, newdata)
+
+    def _get_converted_data(self, scheme):
+        """
+        internal routine to get the data converted to the requested
+        scheme
+
+        If the scheme would be unchanged, a reference to the data is returned
+        """
+        scheme_num = get_scheme_num(scheme)
+        if scheme_num == self.hpix.scheme_num:
+            return self.data
+        
+        if scheme_num==NESTED:
+            raise ValueError("implement ring2nest")
+        else:
+            ipnest=numpy.arange(self.hpix.npix,dtype='i8')
+            ipring=nest2ring(self.hpix.nside, ipnest)
+
+            newdata=self.data.copy()
+            newdata[ipring]=self.data
+
+        return newdata
 
     def get_scheme(self):
         """
         get the scheme used in the map
         """
         return self.hpix.scheme
+
+    def get_scheme_num(self):
+        """
+        get the scheme number used in the map
+        """
+        return self.hpix.scheme_num
+
     def get_nside(self):
         """
         get the nside used in the map
@@ -472,6 +518,7 @@ class Map(object):
         return self.hpix.nside
 
     scheme = property(get_scheme,doc="get the healpix scheme name")
+    scheme_num = property(get_scheme_num,doc="get the healpix scheme number")
     nside = property(get_nside,doc="get the resolution")
 
     def __repr__(self):
@@ -500,7 +547,7 @@ class DensityMap(Map):
     ----------
     scheme: string or int
         if a string is input, the value should be
-            'ring' or 'nested'
+            'ring' or 'nested' (case insensitive)
         if an int is input, the value should be
             healpix.RING or healpix.NESTED.
     array: sequence or array
@@ -537,8 +584,7 @@ class DensityMap(Map):
         super(DensityMap,self).__init__(scheme, array)
 
         # do not allow values less than zero
-        w,=numpy.any(self.data < 0.0)
-        if w.size > 0:
+        if numpy.any(self.data < 0.0):
             raise ValueError("found %d values < 0 in density map "
                              "density maps must be positive")
 
@@ -548,8 +594,26 @@ class DensityMap(Map):
     def convert(self, scheme):
         """
         get a new DensityMap with the specified scheme
+
+        if the scheme would be unchanged, a reference to the internal map data
+        is used
+
+        parameters
+        ----------
+        scheme: string or int
+            if a string is input, the value should be
+                'ring' or 'nested'
+            if an int is input, the value should be
+                healpix.RING or healpix.NESTED.
+
+        returns
+        -------
+        newmap:
+            A new density map with the requested ordering
         """
-        raise RuntimeError("implement convert for DensityMap")
+
+        newdata = self._get_converted_data(scheme)
+        return DensityMap(scheme, newdata)
 
     def get_weight(self, coord1, coord2, system='eq'):
         """
@@ -702,7 +766,7 @@ class DensityMap(Map):
         system: string
             'eq' for equatorial ra,dec in degrees
             'ang' for angular theta,phi in radians
-        **keys:
+        **kw:
             ra_range=, dec_range= to limit range of randoms
                 in ra,dec system
             theta_range=, phi_range= to limit range of randoms
@@ -734,7 +798,7 @@ class DensityMap(Map):
                 nleft -= w.size
         return coord1, coord2
 
-def get_scheme_string(scheme):
+def get_scheme_name(scheme):
     """
     get the string version of a scheme.
 
@@ -751,13 +815,13 @@ def get_scheme_string(scheme):
     -------
     'ring' or 'ntest'
     """
-    if scheme not in _scheme_string_map:
+    if scheme not in _scheme_name_map:
         raise ValueError("bad scheme specification: '%s'" % scheme)
-    return _scheme_string_map[scheme]
+    return _scheme_name_map[scheme]
 
-def get_scheme_int(scheme):
+def get_scheme_num(scheme):
     """
-    get the string version of a scheme.
+    get the integer version of a scheme.
 
     parameters
     ----------
@@ -772,12 +836,12 @@ def get_scheme_int(scheme):
     -------
     1 for ring, 2 for nested
     """
-    if scheme not in _scheme_int_map:
+    if scheme not in _scheme_num_map:
         raise ValueError("bad scheme specification: '%s'" % scheme)
-    return _scheme_int_map[scheme]
+    return _scheme_num_map[scheme]
 
 
-_scheme_int_map={'ring':RING,
+_scheme_num_map={'ring':RING,
                  'RING':RING,
                  RING:RING,
                  'nest':NESTED,
@@ -785,14 +849,14 @@ _scheme_int_map={'ring':RING,
                  'NESTED':NESTED,
                  'NESTED':NESTED,
                  NESTED:NESTED}
-_scheme_string_map={'ring':'ring',
-                    'RING':'ring',
-                    RING:'ring',
-                    'nest':'nested',
-                    'nested':'nested',
-                    'NESTED':'nested',
-                    'NESTED':'nested',
-                    NESTED:'nested'}
+_scheme_name_map={'ring':'RING',
+                  'RING':'RING',
+                  RING:'RING',
+                  'nest':'NESTED',
+                  'nested':'NESTED',
+                  'NESTED':'NESTED',
+                  'NESTED':'NESTED',
+                  NESTED:'NESTED'}
 
 
 
