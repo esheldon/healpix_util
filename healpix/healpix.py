@@ -19,8 +19,8 @@ constants
 ----------
 RING=1
     integer referring to ring scheme
-NEST=2
-    integer referring to nest scheme
+NESTED=2
+    integer referring to nested scheme
 
 POINT_OK=1<<0
     bit mask to indicate a point is "good" in a density map
@@ -44,7 +44,7 @@ from ._healpix import nside_is_ok, npix_is_ok, nside2npix, npix2nside
 from . import coords
 
 RING=1
-NEST=2
+NESTED=2
 POINT_OK=1<<0
 QUAD12_OK=1<<1
 QUAD23_OK=1<<2
@@ -59,9 +59,9 @@ class HealPix(_healpix.HealPix):
     ----------
     scheme: string or int
         if a string is input, the value should be
-            'ring' or 'nest' or 'nested'
+            'ring' or 'nested'
         if an int is input, the value should be
-            healpix.RING (1) or healpix.NEST (2)
+            healpix.RING (1) or healpix.NESTED (2)
         
         Currently, only the ring scheme is fully supported
 
@@ -327,9 +327,9 @@ class Map(object):
     ----------
     scheme: string or int
         if a string is input, the value should be
-            'ring' or 'nest'
+            'ring' or 'nested'
         if an int is input, the value should be
-            healpix.RING or healpix.NEST.
+            healpix.RING or healpix.NESTED.
     array: sequence or array
         array representing the healpix map data
 
@@ -371,7 +371,7 @@ class Map(object):
     print("pixels",indices,":,m.data[indices])
 
     # convert map to nested
-    nmap = m.convert("nest")
+    nmap = m.convert("nested")
     # convert map to ring
     rmap = m.convert("ring")
 
@@ -469,9 +469,9 @@ class DensityMap(Map):
     ----------
     scheme: string or int
         if a string is input, the value should be
-            'ring' or 'nest'
+            'ring' or 'nested'
         if an int is input, the value should be
-            healpix.RING or healpix.NEST.
+            healpix.RING or healpix.NESTED.
     array: sequence or array
         array representing the healpix map data
 
@@ -710,11 +710,11 @@ def get_scheme_string(scheme):
     parameters
     ----------
     scheme: int or string
-        'ring' or 'nest' or 'nested' in lower or upper case,
-        or 1 for ring, 2 for nest
+        'ring' or 'nested' or in lower or upper case,
+        or 1 for ring, 2 for nested
 
         The numerical versions can be gotten with healpix.RING and
-        healpix.NEST
+        healpix.NESTED
 
     returns
     -------
@@ -731,15 +731,15 @@ def get_scheme_int(scheme):
     parameters
     ----------
     scheme: int or string
-        'ring' or 'nest' or 'nested' in lower or upper case,
-        or 1 for ring, 2 for nest
+        'ring' or 'nested' or 'nested' in lower or upper case,
+        or 1 for ring, 2 for nested
 
         The numerical versions can be gotten with healpix.RING and
-        healpix.NEST
+        healpix.NESTED
 
     returns
     -------
-    1 for ring, 2 for nest
+    1 for ring, 2 for nested
     """
     if scheme not in _scheme_int_map:
         raise ValueError("bad scheme specification: '%s'" % scheme)
@@ -749,19 +749,19 @@ def get_scheme_int(scheme):
 _scheme_int_map={'ring':RING,
                  'RING':RING,
                  RING:RING,
-                 'nest':NEST,
-                 'nested':NEST,
-                 'NEST':NEST,
-                 'NESTED':NEST,
-                 NEST:NEST}
+                 'nest':NESTED,
+                 'nested':NESTED,
+                 'NESTED':NESTED,
+                 'NESTED':NESTED,
+                 NESTED:NESTED}
 _scheme_string_map={'ring':'ring',
                     'RING':'ring',
                     RING:'ring',
-                    'nest':'nest',
-                    'nested':'nest',
-                    'NEST':'nest',
-                    'NESTED':'nest',
-                    NEST:'nest'}
+                    'nest':'nested',
+                    'nested':'nested',
+                    'NESTED':'nested',
+                    'NESTED':'nested',
+                    NESTED:'nested'}
 
 
 

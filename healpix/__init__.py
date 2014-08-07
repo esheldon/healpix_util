@@ -15,9 +15,12 @@ from .version import __version__
 from .healpix import \
         HealPix, Map, \
         nside_is_ok, npix_is_ok, nside2npix, npix2nside, \
-        RING, NEST
+        RING, NESTED
 
-from .fileio import read_map, read_maps, read_density_map, read_density_maps
+from .fileio import \
+        read_map, read_maps, \
+        read_density_map, read_density_maps, \
+        write_map
 
 from .coords  import \
         eq2ang, ang2eq, eq2xyz, ang2xyz, \
