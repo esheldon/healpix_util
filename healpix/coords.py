@@ -240,7 +240,7 @@ def get_quadrant_eq(ra_cen, dec_cen, ra, dec):
     return quadrant
 
 
-def randsphere(num, system='eq', **keys):
+def randsphere(num, system='eq', **kw):
     """
     Generate random points on the sphere
 
@@ -250,8 +250,18 @@ def randsphere(num, system='eq', **keys):
         The number of randoms to generate
     system: string
         'eq' for equatorial ra,dec in degrees
+            ra  in [0,360]
+            dec in [-90,90]
         'ang' for angular theta,phi in radians
+            theta in [0,pi]
+            phi   in [0,2*pi]
         'xyz' for x,y,z on the unit sphere
+    **kw:
+        ra_range=, dec_range= to limit range of randoms
+            in ra,dec system
+        theta_range=, phi_range= to limit range of randoms
+            in theta,phi system
+
     output
     ------
     ra,dec: tuple of arrays
@@ -259,16 +269,16 @@ def randsphere(num, system='eq', **keys):
     """
 
     if system=='eq':
-        return randsphere_eq(num, **keys)
+        return randsphere_eq(num, **kw)
     elif system=='ang':
-        return randsphere_ang(num)
+        return randsphere_ang(num, **kw)
     elif system=='xyz':
         theta,phi=randsphere_ang(num)
         return ang2xyz(theta,phi)
     else:
         raise ValueError("bad system: '%s'" % sytem)
 
-def randsphere_eq(num, **keys):
+def randsphere_eq(num, **kw):
     """
     Generate random equatorial ra,dec points on the sphere
 
@@ -288,8 +298,8 @@ def randsphere_eq(num, **keys):
     """
     from numpy import cos, deg2rad, rad2deg, arccos
 
-    ra_range=keys.get('ra_range',None)
-    dec_range=keys.get('dec_range',None)
+    ra_range=kw.get('ra_range',None)
+    dec_range=kw.get('dec_range',None)
 
     ra_range = _check_range(ra_range, [0.0,360.0])
     dec_range = _check_range(dec_range, [-90.0,90.0])
@@ -317,7 +327,7 @@ def randsphere_eq(num, **keys):
     
     return ra, dec
 
-def randsphere_ang(num):
+def randsphere_ang(num, **kw):
     """
     Generate random angular theta,phi points on the sphere
 
@@ -334,10 +344,31 @@ def randsphere_ang(num):
         theta in [0,pi]
         phi   in [0,2*pi]
     """
+    from numpy import pi, cos, arccos
+
+    theta_range=kw.get('theta_range',None)
+    phi_range=kw.get('phi_range',None)
+
+    theta_range = _check_range(theta_range, [0.0,pi])
+    phi_range = _check_range(phi_range, [0, 2.*pi])
 
     phi = numpy.random.random(num)
-    phi *= 2.0*numpy.pi
+    phi *= (phi_range[1]-phi_range[0])
+    if phi_range[0] > 0:
+        phi += phi_range[0]
 
+    cos_theta_min=cos(theta_range[0])
+    cos_theta_max=cos(theta_range[1])
+
+    v = numpy.random.random(num)
+    v *= (cos_theta_max-cos_theta_min)
+    v += cos_theta_min
+
+    v.clip(min=-1.0, max=1.0, out=v)
+    # Now this generates on [0,pi)
+    theta = arccos(v)
+
+    '''
     # number [0,1)
     v = numpy.random.random(num)
     # [0,2)
@@ -347,6 +378,7 @@ def randsphere_ang(num):
 
     # Now this generates on [0,pi)
     theta = numpy.arccos(v)
+    '''
 
     return theta, phi
 
