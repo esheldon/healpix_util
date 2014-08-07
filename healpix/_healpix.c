@@ -1851,7 +1851,7 @@ static PyMethodDef healpix_methods[] = {
     {"_fill_ang2xyz", (PyCFunction)PyHealPix_fill_ang2xyz, METH_VARARGS, 
         "convert theta,phi to x,y,z.  no error checking performed\n"},
 
-    {"_fill_nest2ring", (PyCFunction)PyHealPix_fill_nest2ring, METH_VARARGS, "convert nested pixnums to ring scheme pixnums No error checking here\n"},
+    {"_fill_nest2ring", (PyCFunction)PyHealPix_fill_nest2ring, METH_VARARGS, "convert nested pixnums to ring scheme pixnums. No error checking here\n"},
 
     {"_fill_posangle_eq", (PyCFunction)PyHealPix_fill_posangle_eq, METH_VARARGS, 
         "get position angle around the input point.  no error checking performed\n"},
