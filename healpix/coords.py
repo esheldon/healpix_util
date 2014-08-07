@@ -41,13 +41,24 @@ def eq2ang(ra, dec):
 
     returns
     -------
-    theta: scalar or array
-        pi/2-dec*D2R # in [0,pi]
-    phi: scalar or array
-        phi = ra*D2R # in [0,2*pi]
+    theta,phi: tuple
+        theta = pi/2-dec*D2R # in [0,pi]
+        phi   = ra*D2R       # in [0,2*pi]
     """
-    theta = 0.5*numpy.pi - numpy.deg2rad(dec)
-    phi = numpy.deg2rad(ra)
+    is_scalar=numpy.isscalar(ra)
+
+    ra = numpy.array(ra, dtype='f8', ndmin=1, copy=False)
+    dec = numpy.array(dec, dtype='f8', ndmin=1, copy=False)
+    if ra.size != dec.size:
+        raise ValueError("ra,dec not same size: %s,%s" % (ra.size,dec.size))
+    theta = numpy.zeros(ra.size,dtype='f8')
+    phi   = numpy.zeros(ra.size,dtype='f8')
+
+    _healpix._fill_eq2ang(ra,dec,theta,phi)
+
+    if is_scalar:
+        theta=theta[0]
+        phi=phi[0]
 
     return theta, phi
 
@@ -67,10 +78,9 @@ def ang2eq(theta, phi):
 
     returns
     -------
-    ra: scalar or array
-        phi*R2D          # in [0,360]
-    dec: scalar or array
-        (pi/2-theta)*R2D # in [-90,90]
+    ra,dec: tuple
+        ra  = phi*R2D          # in [0,360]
+        dec = (pi/2-theta)*R2D # in [-90,90]
     """
 
     ra = numpy.rad2deg(phi)
@@ -94,8 +104,25 @@ def eq2xyz(ra, dec):
     -------
     x,y,z on the unit sphere
     """
-    theta, phi = eq2ang(ra,dec)
-    return ang2xyz(theta, phi)
+    is_scalar=numpy.isscalar(ra)
+
+    ra = numpy.array(ra, dtype='f8', ndmin=1, copy=False)
+    dec = numpy.array(dec, dtype='f8', ndmin=1, copy=False)
+    if ra.size != dec.size:
+        raise ValueError("ra,dec not same size: %s,%s" % (ra.size,dec.size))
+    x = numpy.zeros(ra.size,dtype='f8')
+    y = numpy.zeros(ra.size,dtype='f8')
+    z = numpy.zeros(ra.size,dtype='f8')
+
+    _healpix._fill_eq2xyz(ra,dec,x,y,z)
+
+    if is_scalar:
+        x=x[0]
+        y=y[0]
+        z=z[0]
+
+    return x,y,z
+
 
 def ang2xyz(theta, phi):
     """
@@ -112,11 +139,22 @@ def ang2xyz(theta, phi):
     -------
     x,y,z on the unit sphere
     """
-    sintheta = numpy.sin(theta)
-    x = sintheta * numpy.cos(phi)
-    y = sintheta * numpy.sin(phi)
+    is_scalar=numpy.isscalar(theta)
 
-    z = numpy.cos(theta)
+    theta = numpy.array(theta, dtype='f8', ndmin=1, copy=False)
+    phi = numpy.array(phi, dtype='f8', ndmin=1, copy=False)
+    if theta.size != phi.size:
+        raise ValueError("theta,phi not same size: %s,%s" % (theta.size,phi.size))
+    x = numpy.zeros(theta.size,dtype='f8')
+    y = numpy.zeros(theta.size,dtype='f8')
+    z = numpy.zeros(theta.size,dtype='f8')
+
+    _healpix._fill_ang2xyz(theta,phi,x,y,z)
+
+    if is_scalar:
+        x=x[0]
+        y=y[0]
+        z=z[0]
 
     return x,y,z
 

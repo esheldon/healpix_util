@@ -467,21 +467,31 @@ static inline void ang2eq(double theta, double phi, double *ra, double *dec) {
     reset_bounds2(dec, ra);
 }
 
-
 /*
-   ra,dec to standard x,y,z
+   theta,phi to standard x,y,z
 */
-static inline void eq2xyz(double ra, double dec, double* x, double* y, double* z) {
+static inline void ang2xyz(double theta, double phi, double* x, double* y, double* z) {
 
-    double theta=0, phi=0, sintheta=0;
-
-    eq2ang(ra, dec, &theta, &phi);
+    double sintheta=0;
 
     sintheta = sin(theta);
     *x = sintheta * cos(phi);
     *y = sintheta * sin(phi);
     *z = cos(theta);
 }
+
+
+/*
+   ra,dec to standard x,y,z
+*/
+static inline void eq2xyz(double ra, double dec, double* x, double* y, double* z) {
+
+    double theta=0, phi=0;
+
+    eq2ang(ra, dec, &theta, &phi);
+    ang2xyz(theta,phi,x,y,z);
+}
+
 
 static int
 PyHealPix_init(struct PyHealPix* self, PyObject *args, PyObject *kwds)
@@ -1220,7 +1230,6 @@ PyHealPix_query_disc(struct PyHealPix* self, PyObject* args)
 
 
 
-// stand alone methods
 static PyMethodDef PyHealPix_methods[] = {
 
     {"get_scheme", (PyCFunction)PyHealPix_get_scheme, METH_VARARGS, "get scheme name\n"},
@@ -1346,6 +1355,155 @@ PyObject *PyHealPix_npix2nside(PyObject *self, PyObject *args)
     return Py_BuildValue("l", nside);
 }
 
+
+/*
+   convert equatorial ra,dec degrees to angular theta,phi radians.
+   
+   No error checking here
+*/
+PyObject* PyHealPix_fill_eq2ang(PyObject *self, PyObject *args)
+{
+    PyObject* ra_obj=NULL;
+    PyObject* dec_obj=NULL;
+    PyObject* theta_obj=NULL;
+    PyObject* phi_obj=NULL;
+
+    double ra, dec;
+    double *theta_ptr, *phi_ptr;
+    npy_intp i, num;
+
+    if (!PyArg_ParseTuple(args, (char*)"OOOO",
+                          &ra_obj, &dec_obj, &theta_obj, &phi_obj)) {
+        return NULL;
+    }
+
+    num=PyArray_SIZE(ra_obj);
+
+    for (i=0; i<num; i++) {
+        ra  = *(double *) PyArray_GETPTR1(ra_obj, i);
+        dec = *(double *) PyArray_GETPTR1(dec_obj, i);
+        theta_ptr = (double *) PyArray_GETPTR1(theta_obj, i);
+        phi_ptr = (double *) PyArray_GETPTR1(phi_obj, i);
+
+        eq2ang(ra, dec, theta_ptr, phi_ptr);
+    }
+
+    Py_RETURN_NONE;
+
+}
+
+/*
+   convert angular theta,phi radians to equatorial ra,dec degrees
+   
+   No error checking here
+*/
+PyObject* PyHealPix_fill_ang2eq(PyObject *self, PyObject *args)
+{
+    PyObject* theta_obj=NULL;
+    PyObject* phi_obj=NULL;
+    PyObject* ra_obj=NULL;
+    PyObject* dec_obj=NULL;
+
+    double theta, phi;
+    double *ra_ptr, *dec_ptr;
+    npy_intp i, num;
+
+    if (!PyArg_ParseTuple(args, (char*)"OOOO",
+                          &theta_obj, &phi_obj, &ra_obj, &dec_obj)) {
+        return NULL;
+    }
+
+    num=PyArray_SIZE(ra_obj);
+
+    for (i=0; i<num; i++) {
+        theta = *(double *) PyArray_GETPTR1(theta_obj, i);
+        phi = *(double *) PyArray_GETPTR1(phi_obj, i);
+        ra_ptr = (double *) PyArray_GETPTR1(ra_obj, i);
+        dec_ptr = (double *) PyArray_GETPTR1(dec_obj, i);
+
+        ang2eq(theta, phi, ra_ptr, dec_ptr);
+    }
+
+    Py_RETURN_NONE;
+
+}
+
+
+/*
+   convert equatorial ra,dec degrees to x,y,z
+   
+   No error checking here
+*/
+PyObject* PyHealPix_fill_eq2xyz(PyObject *self, PyObject *args)
+{
+    PyObject* ra_obj=NULL;
+    PyObject* dec_obj=NULL;
+    PyObject* x_obj=NULL;
+    PyObject* y_obj=NULL;
+    PyObject* z_obj=NULL;
+
+    double ra, dec;
+    double *x_ptr, *y_ptr, *z_ptr;
+    npy_intp i, num;
+
+    if (!PyArg_ParseTuple(args, (char*)"OOOOO",
+                          &ra_obj, &dec_obj, &x_obj, &y_obj, &z_obj)) {
+        return NULL;
+    }
+
+    num=PyArray_SIZE(ra_obj);
+
+    for (i=0; i<num; i++) {
+        ra  = *(double *) PyArray_GETPTR1(ra_obj, i);
+        dec = *(double *) PyArray_GETPTR1(dec_obj, i);
+        x_ptr = (double *) PyArray_GETPTR1(x_obj, i);
+        y_ptr = (double *) PyArray_GETPTR1(y_obj, i);
+        z_ptr = (double *) PyArray_GETPTR1(z_obj, i);
+
+        eq2xyz(ra, dec, x_ptr, y_ptr, z_ptr);
+    }
+
+    Py_RETURN_NONE;
+
+}
+
+/*
+   convert angular theta,phi radians to x,y,z
+   
+   No error checking here
+*/
+PyObject* PyHealPix_fill_ang2xyz(PyObject *self, PyObject *args)
+{
+    PyObject* theta_obj=NULL;
+    PyObject* phi_obj=NULL;
+    PyObject* x_obj=NULL;
+    PyObject* y_obj=NULL;
+    PyObject* z_obj=NULL;
+
+    double theta, phi;
+    double *x_ptr, *y_ptr, *z_ptr;
+    npy_intp i, num;
+
+    if (!PyArg_ParseTuple(args, (char*)"OOOOO",
+                          &theta_obj, &phi_obj, &x_obj, &y_obj, &z_obj)) {
+        return NULL;
+    }
+
+    num=PyArray_SIZE(theta_obj);
+
+    for (i=0; i<num; i++) {
+        theta  = *(double *) PyArray_GETPTR1(theta_obj, i);
+        phi = *(double *) PyArray_GETPTR1(phi_obj, i);
+        x_ptr = (double *) PyArray_GETPTR1(x_obj, i);
+        y_ptr = (double *) PyArray_GETPTR1(y_obj, i);
+        z_ptr = (double *) PyArray_GETPTR1(z_obj, i);
+
+        ang2xyz(theta, phi, x_ptr, y_ptr, z_ptr);
+    }
+
+    Py_RETURN_NONE;
+
+}
 
 
 /*
@@ -1480,6 +1638,15 @@ static PyMethodDef healpix_methods[] = {
         "nside: integer\n"
         "    nside implied by the input npix\n"
         },
+
+    {"_fill_eq2ang", (PyCFunction)PyHealPix_fill_eq2ang, METH_VARARGS, 
+        "convert ra,dec to theta,phi.  no error checking performed\n"},
+    {"_fill_ang2eq", (PyCFunction)PyHealPix_fill_ang2eq, METH_VARARGS, 
+        "convert theta,phi to ra,dec.  no error checking performed\n"},
+    {"_fill_eq2xyz", (PyCFunction)PyHealPix_fill_eq2xyz, METH_VARARGS, 
+        "convert ra,dec to x,y,z.  no error checking performed\n"},
+    {"_fill_ang2xyz", (PyCFunction)PyHealPix_fill_ang2xyz, METH_VARARGS, 
+        "convert theta,phi to x,y,z.  no error checking performed\n"},
 
     {"_fill_posangle_eq", (PyCFunction)PyHealPix_fill_posangle_eq, METH_VARARGS, 
         "get position angle around the input point.  no error checking performed\n"},
