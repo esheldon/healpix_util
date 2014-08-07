@@ -69,7 +69,7 @@ struct PyHealPix {
     PyObject_HEAD
 
     int scheme;  // HPX_RING or HPX_NEST
-    char scheme_name[5]; // "ring" or "nest"
+    char scheme_name[7]; // "ring" or "nested"
     int64_t nside;
     int64_t npix;
     int64_t ncap;
@@ -599,9 +599,9 @@ PyHealPix_init(struct PyHealPix* self, PyObject *args, PyObject *kwds)
     }
     self->scheme = scheme;
     if (scheme == HPX_RING) {
-        sprintf(self->scheme_name,"ring");
+        sprintf(self->scheme_name,"RING");
     } else {
-        sprintf(self->scheme_name,"nest");
+        sprintf(self->scheme_name,"NESTED");
     }
     self->nside  = (int64_t) nside;
     self->npix   = nside2npix(nside);
@@ -1188,6 +1188,7 @@ PyHealPix_fill_ang2pix(struct PyHealPix* self, PyObject* args)
         if (self->scheme == HPX_RING) {
             (*pix_ptr) = ang2pix_ring(self, theta, phi);
         } else {
+            printf("nest is not yet supported!\n");
             //(*pix_ptr) = ang2pix_nest(self, ra, dec);
         }
     }
@@ -1228,6 +1229,7 @@ PyHealPix_fill_eq2pix(struct PyHealPix* self, PyObject* args)
         if (self->scheme == HPX_RING) {
             (*pix_ptr) = eq2pix_ring(self, ra, dec);
         } else {
+            printf("nest is not yet supported!\n");
             //(*pix_ptr) = eq2pix_nest(self, ra, dec);
         }
     }
@@ -1270,6 +1272,7 @@ PyHealPix_fill_pix2ang(struct PyHealPix* self, PyObject* args)
         if (self->scheme == HPX_RING) {
             pix2ang_ring(self, pixnum, theta_ptr, phi_ptr);
         } else {
+            printf("nest is not yet supported!\n");
             //pix2ang_nest(self, pixnum, theta_ptr, phi_ptr);
         }
     }
@@ -1312,6 +1315,7 @@ PyHealPix_fill_pix2eq(struct PyHealPix* self, PyObject* args)
         if (self->scheme == HPX_RING) {
             pix2eq_ring(self, pixnum, ra_ptr, dec_ptr);
         } else {
+            printf("nest is not yet supported!\n");
             //pix2eq_nest(self, pixnum, ra_ptr, dec_ptr);
         }
     }
@@ -1377,6 +1381,7 @@ PyHealPix_query_disc(struct PyHealPix* self, PyObject* args)
                         inclusive,
                         listpix);
     } else {
+        printf("nest is not yet supported!\n");
         /*
         query_disc_nest(self,
                        ra,
