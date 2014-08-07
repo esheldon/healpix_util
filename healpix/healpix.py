@@ -51,6 +51,37 @@ QUAD23_OK=1<<2
 QUAD34_OK=1<<3
 QUAD41_OK=1<<4
 
+def nest2ring(nside, ipnest):
+    """
+    convert the input pixel number(s) in nested scheme to ring scheme
+
+    parameters
+    ----------
+    nside: int
+        healpix resolution
+    ipnest: scalar or array
+        The pixel number(s) in nested scheme
+
+    returns
+    -------
+    ipring: scalar array
+        The pixel number(s) in ringscheme
+    """
+
+    # just to hold some metadata
+    is_scalar=numpy.isscalar(ipnest)
+
+    ipnest = numpy.array(ipnest, dtype='i8', ndmin=1, copy=False)
+    ipring = numpy.zeros(ipnest.size, dtype='i8')
+
+    _healpix._fill_nest2ring(nside, ipnest, ipring)
+
+    if is_scalar:
+        ipring=ipring[0]
+    return ipring
+
+
+
 class HealPix(_healpix.HealPix):
     """
     class representing a healpix resolution
@@ -506,7 +537,7 @@ class DensityMap(Map):
         super(DensityMap,self).__init__(scheme, array)
 
         # do not allow values less than zero
-        w,=numpy.where(self.data < 0.0)
+        w,=numpy.any(self.data < 0.0)
         if w.size > 0:
             raise ValueError("found %d values < 0 in density map "
                              "density maps must be positive")
@@ -689,7 +720,7 @@ class DensityMap(Map):
 
             weights=self.get_weight(t1,t2,system=system)
 
-            # keep with probability 
+            # keep with probability equal to weight
             ru = numpy.random.random(nleft)
 
             w,=numpy.where( ru < weights )

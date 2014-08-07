@@ -1,7 +1,7 @@
 /*
 
-   Much of this code was adapted from various C/C++/f90/idl code distributed
-   with healpix and healpy, distributed under the GPL
+   Much of this code was adapted from various C/C++/f90 code distributed
+   with healpix and healpy, under the GPL license
 
    The original license info is as follows
 
@@ -64,6 +64,7 @@
 // 12*max_nside^2
 #define HPX_MAX_NPIX 3458764513820540928L
 
+
 struct PyHealPix {
     PyObject_HEAD
 
@@ -73,7 +74,17 @@ struct PyHealPix {
     int64_t npix;
     int64_t ncap;
     double area;
+
 };
+static int64_t pix2x[1024];
+static int64_t pix2y[1024];
+
+static int64_t x2pix1[128];
+static int64_t y2pix1[128];
+
+static int64_t jrll1[] = {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4}; // in unit of nside
+static int64_t jpll1[] = {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7}; // in unit of nside/2
+
 
 struct PyHealPixCap {
     double ra;
@@ -493,6 +504,79 @@ static inline void eq2xyz(double ra, double dec, double* x, double* y, double* z
 }
 
 
+/*
+   make static variables
+*/
+
+/*
+    fill the arrays giving x and y in the face from pixel number
+    for the nested (quad-cube like) ordering of pixels
+*/
+
+static void mk_pix2xy(void)
+{
+    int64_t kpix, jpix, ix, iy, ip, id;
+
+    for (kpix=0; kpix<1024; kpix++) {
+        jpix = kpix;
+        ix = 0;
+        iy = 0;
+        ip = 1;               // bit position (in x and y)
+        while (jpix != 0) {  // go through all the bits
+
+
+            id = jpix % 2; // bit value (in kpix), goes in ix
+            jpix = jpix/2;
+            ix = id*ip+ix;
+
+            id = jpix % 2; //[ bit value (in kpix), goes in iy
+            jpix = jpix/2;
+            iy = id*ip+iy;
+
+            ip = 2*ip;     // next bit (in x and y)
+        }
+        pix2x[kpix] = ix;     // in 0,31
+        pix2y[kpix] = iy;     // in 0,31
+    }
+
+}
+
+/*
+    fill the arrays giving the number of the pixel lying in (x,y)
+         x and y are in {1,128}
+         the pixel number is in {0,128**2-1}
+    
+         if  i-1 = sum_p=0  b_p * 2^p
+         then ix = sum_p=0  b_p * 4^p
+              iy = 2*ix
+         ix + iy in {0, 128**2 -1}
+*/
+
+static void mk_xy2pix1(void) {
+    int64_t k,ip,i,j,id;
+
+    for (i=0; i<128; i++) {
+        j  = i;
+        k  = 0;
+        ip = 1;
+
+        while (1) {
+
+            if (j==0) {
+                x2pix1[i] = k;
+                y2pix1[i] = 2*k;
+                break;
+            }
+
+            id = j % 2;
+            j  = j/2;
+            k  = ip*id+k;
+            ip = ip*4;
+
+        }
+    }
+}
+
 static int
 PyHealPix_init(struct PyHealPix* self, PyObject *args, PyObject *kwds)
 {
@@ -523,7 +607,7 @@ PyHealPix_init(struct PyHealPix* self, PyObject *args, PyObject *kwds)
     self->npix   = nside2npix(nside);
     self->area   = nside2area(nside);
     self->ncap   = nside2ncap(nside);
-
+    
     return 0;
 }
 
@@ -573,7 +657,94 @@ PyHealPix_dealloc(struct PyHealPix* self)
 #endif
 }
 
+/*
+   convert nest pixel to a ring pixel
+*/
 
+static void nest2ring_arr(int64_t nside,
+                          int64_t *ipnest,
+                          int64_t *ipring,
+                          int64_t n)
+{
+    int64_t npface, nl4, face_num, ipf,
+            ix, iy, scale, ismax, i, ip_low,
+            jrt, jpt, jr, jp, nr, n_before, kshift;
+    int64_t npix;
+    int64_t ai;
+
+    npix=nside2npix(nside);
+    for (ai=0; ai<n; ai++) {
+        if (ipnest[ai] < 0 || ipnest[ai] > npix-1) {
+            ipring[ai]=-9999;
+            continue;
+        }
+
+        npface = nside*nside;
+        nl4    = 4*nside;
+
+        // finds the face, and the number in the face
+        face_num = ipnest[ai]/npface;   // face number in [0,11]
+        ipf = ipnest[ai] & (npface-1);  // pixel number in the face [0,npface-1]
+
+
+        // finds the x,y on the face (starting from the lowest corner)
+        // from the pixel number
+        ix = 0;
+        iy = 0;
+        scale = 1;
+        ismax = 4;
+        for (i=0; i<= ismax; i++) {
+            ip_low = ipf & 1023;
+            ix = ix + scale * pix2x[ip_low];
+            iy = iy + scale * pix2y[ip_low];
+            scale = scale * 32;
+            ipf   = ipf/1024;
+        }
+        ix = ix + scale * pix2x[ipf];
+        iy = iy + scale * pix2y[ipf];
+
+        //     transforms this in (horizontal, vertical) coordinates
+        jrt = ix + iy;  // 'vertical' in [0,2*(nside-1)]
+        jpt = ix - iy;  // 'horizontal' in [-nside+1,nside-1]
+
+        //     computes the z coordinate on the sphere
+        jr =  jrll1[face_num]*nside - jrt - 1;   // ring number in [1,4*nside-1]
+
+        if (jr < nside) {     // north pole region
+            nr = jr;
+            n_before = 2 * nr * (nr - 1);
+            kshift = 0;
+        } else if (jr <= 3*nside) { // equatorial region (the most frequent)
+            nr = nside;               
+            n_before = 2 * nr * ( 2 * jr - nr - 1);
+            kshift = (jr-nside) & 1;
+
+        } else { //south pole region
+            nr = nl4 - jr;
+            n_before = npix - 2 * nr * (nr + 1);
+            kshift = 0;
+        }
+
+        //     computes the phi coordinate on the sphere, in [0,2Pi]
+        jp = (jpll1[face_num]*nr + jpt + 1 + kshift)/2;  // 'phi' number in the ring in [1,4*nr]
+        if (jp > nl4) {
+            jp = jp - nl4;
+        }
+        if (jp < 1) {
+            jp = jp + nl4;
+        }
+
+        ipring[ai] = n_before + jp - 1; // in [0, npix-1]
+
+    } // over array
+}
+
+static int64_t nest2ring(int64_t nside, int64_t ipnest)
+{
+    int64_t ipring;
+    nest2ring_arr(nside, &ipnest, &ipring, 1);
+    return ipring;
+}
 
 /*
    convert angular theta,phi to pixel number in the ring scheme
@@ -1248,6 +1419,8 @@ static PyMethodDef PyHealPix_methods[] = {
 
     {"_fill_pix2ang", (PyCFunction)PyHealPix_fill_pix2ang, METH_VARARGS, "convert pixel number to angular theta,phi radians.  Don't call this method directly, since no error or type checking is performed\n"},
     {"_fill_pix2eq", (PyCFunction)PyHealPix_fill_pix2eq, METH_VARARGS, "convert pixel number to equatorial ra,dec degrees.  Don't call this method directly, since no error or type checking is performed\n"},
+
+
     {NULL}  /* Sentinel */
 };
 
@@ -1505,6 +1678,36 @@ PyObject* PyHealPix_fill_ang2xyz(PyObject *self, PyObject *args)
 
 }
 
+/*
+   convert nested pixnums to ring scheme pixnums
+   
+   No error checking here
+*/
+PyObject* PyHealPix_fill_nest2ring(PyObject* self, PyObject *args)
+{
+    PyObject* ipnest_obj=NULL;
+    PyObject* ipring_obj=NULL;
+
+    int nside;
+    int64_t *ipnest_ptr, *ipring_ptr;
+
+    npy_intp num;
+    if (!PyArg_ParseTuple(args, (char*)"iOO",
+                          &nside,&ipnest_obj, &ipring_obj)) {
+        return NULL;
+    }
+
+    num=PyArray_SIZE(ipnest_obj);
+
+    ipnest_ptr = (int64_t *) PyArray_DATA(ipnest_obj);
+    ipring_ptr = (int64_t *) PyArray_DATA(ipring_obj);
+
+    nest2ring_arr(nside, ipnest_ptr, ipring_ptr, num);
+
+    Py_RETURN_NONE;
+}
+
+
 
 /*
    get position angle round the central point.  No error checking
@@ -1648,6 +1851,8 @@ static PyMethodDef healpix_methods[] = {
     {"_fill_ang2xyz", (PyCFunction)PyHealPix_fill_ang2xyz, METH_VARARGS, 
         "convert theta,phi to x,y,z.  no error checking performed\n"},
 
+    {"_fill_nest2ring", (PyCFunction)PyHealPix_fill_nest2ring, METH_VARARGS, "convert nested pixnums to ring scheme pixnums No error checking here\n"},
+
     {"_fill_posangle_eq", (PyCFunction)PyHealPix_fill_posangle_eq, METH_VARARGS, 
         "get position angle around the input point.  no error checking performed\n"},
     {"_fill_quadrant_eq", (PyCFunction)PyHealPix_fill_quadrant_eq, METH_VARARGS, 
@@ -1708,6 +1913,10 @@ init_healpix(void)
 
     Py_INCREF(&PyHealPixType);
     PyModule_AddObject(m, "HealPix", (PyObject *)&PyHealPixType);
+
+    // variables useful in many contexts
+    mk_pix2xy();
+    mk_xy2pix1();
 
     import_array();
 #if PY_MAJOR_VERSION >= 3
