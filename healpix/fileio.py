@@ -12,7 +12,7 @@ read_density_maps:
 """
 from __future__ import print_function
 import numpy
-from .healpix import HealPix, Map, DensityMap, get_scheme_string
+from .healpix import HealPix, Map, DensityMap, get_scheme_name
 
 def read_map(filename, column=0, **kw):
     """
@@ -51,7 +51,7 @@ def read_map(filename, column=0, **kw):
 
     scheme = kw.get("scheme",None)
     if scheme is not None:
-        scheme=get_scheme_string(scheme)
+        scheme=get_scheme_name(scheme)
 
     if not numpy.isscalar(column):
         column=column[0]
@@ -63,35 +63,29 @@ def read_map(filename, column=0, **kw):
         if not isinstance(hdu,fitsio.fitslib.TableHDU):
             raise ValueError("extension %s is not a table" % ext)
 
-        header = hdu.read_header()
+        hdr = hdu.read_header()
 
         # user may specify columns= here
         data = hdu.read_column(column,**kw)
 
-        if 'ordering' in header:
-            scheme_in_file = header['ordering'].strip()
-            scheme_in_file = get_scheme_string(scheme_in_file)
-        else:
-            # we need input from the user
-            if scheme is None:
-                raise ValueError("ORDERING not in header, send scheme= "
-                                 "to specify")
-            scheme_in_file = scheme
+    if 'ordering' in hdr:
+        scheme_in_file = get_scheme_name(hdr['ordering'].strip())
+    else:
+        # we need input from the user
+        if scheme is None:
+            raise ValueError("ORDERING not in header, send scheme= "
+                             "to specify")
+        scheme_in_file = scheme
 
-        if scheme is not None and scheme != scheme_in_file:
-            print("converting from scheme '%s' "
-                  "to '%s'" % (scheme_in_file,scheme))
-            do_convert=True
-        else:
-            do_convert=False
-
-        hmap = Map(scheme_in_file,data)
-        if do_convert:
-            hmap=hmap.convert(scheme)
+    hmap = Map(scheme_in_file,data)
+    if scheme is not None and scheme != scheme_in_file:
+        print("converting from scheme '%s' "
+              "to '%s'" % (scheme_in_file,scheme))
+        hmap=hmap.convert(scheme)
 
     gethead=kw.get("header",False)
     if gethead:
-        return hmap, header
+        return hmap, hdr
     else:
         return hmap
 
@@ -103,7 +97,7 @@ def read_maps(filename, **kw):
     ----------
     filename: string
         The fits filename
-    scheme: string or int
+    scheme: string or int, optional
         Optional scheme specification.  If the scheme is not specified
         in the header as 'ORDERING', then you can specify it with
         this keyword.
@@ -128,7 +122,7 @@ def read_maps(filename, **kw):
 
     scheme = kw.get("scheme",None)
     if scheme is not None:
-        scheme=get_scheme_string(scheme)
+        scheme=get_scheme_name(scheme)
 
     # make sure columns is a sequence to ensure we get
     # an array with fields back
@@ -144,43 +138,41 @@ def read_maps(filename, **kw):
         if not isinstance(hdu,fitsio.fitslib.TableHDU):
             raise ValueError("extension %s is not a table" % ext)
 
-        header = hdu.read_header()
-
+        hdr = hdu.read_header()
         data = hdu.read(**kw)
 
-        if 'ordering' in header:
-            scheme_in_file = header['ordering'].strip()
-            scheme_in_file = get_scheme_string(scheme_in_file)
-        else:
-            # we need input from the user
-            if scheme is None:
-                raise ValueError("ORDERING not in header, send scheme= "
-                                 "to specify")
-            scheme_in_file = scheme
+    if 'ordering' in hdr:
+        scheme_in_file = get_scheme_name(hdr['ordering'].strip())
+    else:
+        # we need input from the user
+        if scheme is None:
+            raise ValueError("ORDERING not in header, send scheme= "
+                             "to specify")
+        scheme_in_file = scheme
 
-        if scheme is not None and scheme != scheme_in_file:
-            print("converting from scheme '%s' "
-                  "to '%s'" % (scheme_in_file,scheme))
-            do_convert=True
-        else:
-            do_convert=False
+    if scheme is not None and scheme != scheme_in_file:
+        print("converting from scheme '%s' "
+              "to '%s'" % (scheme_in_file,scheme))
+        do_convert=True
+    else:
+        do_convert=False
 
-        names=data.dtype.names
-        # there were multiple columns read
-        map_dict=OrderedDict()
-        for name in names:
-            m = Map(scheme_in_file,data[name])
-            if do_convert:
-                m=m.convert(scheme)
-            map_dict[name] = m
+    names=data.dtype.names
+    # there were multiple columns read
+    map_dict=OrderedDict()
+    for name in names:
+        m = Map(scheme_in_file,data[name])
+        if do_convert:
+            m=m.convert(scheme)
+        map_dict[name] = m
 
     gethead=kw.get("header",False)
     if gethead:
-        return map_dict, header
+        return map_dict, hdr
     else:
         return map_dict
 
-def read_density_map(filename, column=0, **kw):
+def read_density_map(filename, **kw):
     """
     read a density healpix map from the specified file
 
@@ -214,15 +206,15 @@ def read_density_map(filename, column=0, **kw):
 
     if header=True is specified, a tuple (map, header) is returned
     """
-    res=read_map(filename, column=column, **kw)
+    res=read_map(filename, **kw)
     if isinstance(res,tuple):
-        hmap,header=res
+        hmap,hdr=res
     else:
         hmap=res
 
     density_hmap = DensityMap(hmap.scheme, hmap.data)
     if isinstance(res,tuple):
-        return density_hmap, header
+        return density_hmap, hdr
     else:
         return density_hmap
 
@@ -262,7 +254,7 @@ def read_density_maps(filename, **kw):
     from collections import OrderedDict
     res=read_maps(filename, **kw)
     if isinstance(res,tuple):
-        map_dict,header=res
+        map_dict,hdr=res
     else:
         map_dict=res
 
@@ -271,7 +263,7 @@ def read_density_maps(filename, **kw):
         density_map_dict[name] = DensityMap(hmap.scheme, hmap.data)
 
     if isinstance(res,tuple):
-        return density_map_dict, header
+        return density_map_dict, hdr
     else:
         return density_map_dict
 
@@ -290,6 +282,8 @@ def write_map(filename, hmap, colname='I', **kw):
         A healpix.Map or child inheriting from Map
     colname: string, optional
         defaults to 'I'
+    scheme: string or int, optional
+        Force the requested scheme
 
     other keywords for fitsio
     -------------------------
@@ -306,6 +300,10 @@ def write_map(filename, hmap, colname='I', **kw):
 
     import fitsio
 
+    scheme_to_write=kw.get('scheme',None)
+    if scheme_to_write is not None:
+        hmap=hmap.convert(scheme_to_write)
+
     npix=hmap.data.size
     if npix > 1024:
         dt=hmap.data.dtype.descr[0][1]
@@ -318,7 +316,7 @@ def write_map(filename, hmap, colname='I', **kw):
 
         fits.write(dataview, **kw)
 
-        fits[-1].write_key("ORDERING",hmap.scheme.upper())
+        fits[-1].write_key("ORDERING",hmap.scheme)
         fits[-1].write_key("NSIDE",hmap.nside)
 
 def write_maps(filename, hmap_dict,  **kw):
@@ -339,7 +337,7 @@ def write_maps(filename, hmap_dict,  **kw):
         where to write the data
     hmap_dict: ordered dict of Map
         An ordered dict holding healpix.Map or children inheriting from Map
-    scheme: string, optional
+    scheme: string or int, optional
         Specify to force all maps to this scheme.  By default all maps
         are forced to that of the first map in the dict.
 
@@ -362,6 +360,8 @@ def write_maps(filename, hmap_dict,  **kw):
     scheme=kw.get('scheme',None)
     if scheme is None:
         scheme=hmap_dict[keys[0]].scheme
+    else:
+        scheme=get_scheme_name(scheme)
 
     npix=hmap_dict[keys[0]].data.size
 
@@ -400,6 +400,6 @@ def write_maps(filename, hmap_dict,  **kw):
 
         fits.write(output, **kw)
 
-        fits[-1].write_key("ORDERING",scheme.upper())
+        fits[-1].write_key("ORDERING",scheme)
         fits[-1].write_key("NSIDE",hmap.nside)
 
