@@ -747,6 +747,18 @@ static int64_t nest2ring(int64_t nside, int64_t ipnest)
 }
 
 /*
+
+
+
+
+   ring scheme related routines
+
+
+
+
+*/
+
+/*
    convert angular theta,phi to pixel number in the ring scheme
 */
 static int64_t ang2pix_ring(const struct PyHealPix* self,
@@ -797,7 +809,6 @@ static int64_t ang2pix_ring(const struct PyHealPix* self,
         } else {
             ipix = self->npix - 2*ir*(ir+1) + ip;
         }
-
     }
 
     return ipix;
@@ -809,7 +820,6 @@ static int64_t ang2pix_ring(const struct PyHealPix* self,
 static inline int64_t eq2pix_ring(const struct PyHealPix* hpix,
                                   double ra,
                                   double dec) {
-
     int64_t pixnum;
     double theta, phi;
     eq2ang(ra, dec, &theta, &phi);
@@ -1116,6 +1126,124 @@ SKIP2:
     }
 }
 
+/*
+
+
+   nested scheme related routines
+
+
+*/
+
+/*
+   convert angular theta,phi to pixel number in the nested scheme
+*/
+static int64_t ang2pix_nest(const struct PyHealPix* self,
+                            double theta,
+                            double phi) {
+
+    int64_t nside=self->nside;
+    int64_t i, ipix=0, face_num, 
+            ix, iy, ix_low, iy_low,
+            jp, jm, ifp, ifm, ntt, ipf,
+            scale, scale_factor,
+            ismax;;
+    double z=0, za=0, tt=0, tp, tmp, temp1, temp2;
+
+    z = cos(theta);
+    za = fabs(z);
+
+    // in [0,4)
+    tt = fmod(phi, HPX_TWO_PI)/M_PI_2;
+
+    if (za <= HPX_TWOTHIRD) { // equatorial region
+        temp1=nside*(0.5 + tt - z*0.75);
+        temp2=nside*(0.5 + tt + z*0.75);
+
+        // (the index of edge lines increase when the longitude=phi goes up)
+        jp = (int64_t) temp1; //  ascending edge line index
+        jm = (int64_t) temp2; // descending edge line index
+
+        //        finds the face
+        ifp = jp / nside;  // in [0,4]
+        ifm = jm / nside;
+
+        if (ifp == ifm) {              // faces 4 to 7
+            face_num = (ifp & 3)  + 4;
+        } else if (ifp < ifm) {          // (half-)faces 0 to 3
+            face_num = ifp & 3;
+        } else {                         // (half-)faces 8 to 11
+            face_num = (ifm & 3) + 8;
+        }
+
+        ix =          jm & (nside-1);
+        iy = nside - (jp & (nside-1)) - 1;
+
+    } else { // polar region, za > 2/3
+        ntt = (int64_t) tt;
+        if (ntt >= 4) {
+            ntt = 3;
+        }
+        tp = tt - (double)ntt;
+
+        if (z > 0.0) {
+            tmp = sqrt(6.0) * sin( theta * 0.5);
+        } else {
+            tmp = sqrt(6.0) * cos( theta * 0.5);
+        }
+
+        // (the index of edge lines increase when distance from the closest pole goes up)
+        jp = (int64_t) ( nside * tp * tmp ); // line going toward the pole as phi increases
+        jm = (int64_t) ( nside * (1.0 - tp) * tmp );  // that one goes away of the closest pole
+        jp = i64min(nside-1, jp); // for points too close to the boundary
+        jm = i64min(nside-1, jm);
+
+       // finds the face and pixel's (x,y)
+       if (z >= 0) {
+          face_num = ntt;       // in [0,3]
+          ix = nside - jm - 1;
+          iy = nside - jp - 1;
+       } else {
+          face_num = ntt + 8;   // in [8,11]
+          ix =  jp;
+          iy =  jm;
+       }
+    }
+
+    scale = 1;
+    scale_factor = 16384;             // 128*128
+    ipf = 0;
+    ismax = 1;                        // for nside in [2^14, 2^20]
+    if (nside >  1048576 ) {
+        ismax = 3;
+    }
+    for (i=0; i <= ismax; i++) {
+        ix_low = ix & 127;            // last 7 bits
+        iy_low = iy & 127;            // last 7 bits
+        ipf = ipf + (x2pix1[ix_low]+y2pix1[iy_low]) * scale;
+        scale = scale * scale_factor;
+        ix  =     ix / 128; // truncate out last 7 bits
+        iy  =     iy / 128;
+    }
+    ipf =  ipf + (x2pix1[ix]+y2pix1[iy]) * scale;
+
+    ipix = ipf + face_num* nside * nside;   // in [0, 12*nside**2 - 1]
+
+    return ipix;
+}
+
+/*
+   convert equatorial ra,dec to pixel number in the nested scheme
+*/
+static inline int64_t eq2pix_nest(const struct PyHealPix* hpix,
+                                  double ra,
+                                  double dec) {
+    int64_t pixnum;
+    double theta, phi;
+    eq2ang(ra, dec, &theta, &phi);
+    pixnum=ang2pix_nest(hpix, theta, phi);
+    return pixnum;
+}
+
 
 /*
    getters
@@ -1188,8 +1316,7 @@ PyHealPix_fill_ang2pix(struct PyHealPix* self, PyObject* args)
         if (self->scheme == HPX_RING) {
             (*pix_ptr) = ang2pix_ring(self, theta, phi);
         } else {
-            printf("nest is not yet supported!\n");
-            //(*pix_ptr) = ang2pix_nest(self, ra, dec);
+            (*pix_ptr) = ang2pix_nest(self, theta, phi);
         }
     }
 
@@ -1229,8 +1356,7 @@ PyHealPix_fill_eq2pix(struct PyHealPix* self, PyObject* args)
         if (self->scheme == HPX_RING) {
             (*pix_ptr) = eq2pix_ring(self, ra, dec);
         } else {
-            printf("nest is not yet supported!\n");
-            //(*pix_ptr) = eq2pix_nest(self, ra, dec);
+            (*pix_ptr) = eq2pix_nest(self, ra, dec);
         }
     }
 
