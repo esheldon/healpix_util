@@ -82,8 +82,8 @@ static int64_t pix2y[1024];
 static int64_t x2pix1[128];
 static int64_t y2pix1[128];
 
-static int64_t jrll1[] = {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4}; // in unit of nside
-static int64_t jpll1[] = {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7}; // in unit of nside/2
+static int64_t jrll[]  = {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4}; // in unit of nside
+static int64_t jpll[] =  {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7}; // in unit of nside/2
 
 
 struct PyHealPixCap {
@@ -708,7 +708,7 @@ static void nest2ring_arr(int64_t nside,
         jpt = ix - iy;  // 'horizontal' in [-nside+1,nside-1]
 
         //     computes the z coordinate on the sphere
-        jr =  jrll1[face_num]*nside - jrt - 1;   // ring number in [1,4*nside-1]
+        jr =  jrll[face_num]*nside - jrt - 1;   // ring number in [1,4*nside-1]
 
         if (jr < nside) {     // north pole region
             nr = jr;
@@ -726,7 +726,7 @@ static void nest2ring_arr(int64_t nside,
         }
 
         //     computes the phi coordinate on the sphere, in [0,2Pi]
-        jp = (jpll1[face_num]*nr + jpt + 1 + kshift)/2;  // 'phi' number in the ring in [1,4*nr]
+        jp = (jpll[face_num]*nr + jpt + 1 + kshift)/2;  // 'phi' number in the ring in [1,4*nr]
         if (jp > nl4) {
             jp = jp - nl4;
         }
@@ -914,7 +914,6 @@ static inline void pix2eq_ring(const struct PyHealPix* self,
                                int64_t pixnum,
                                double *ra,
                                double *dec) {
-
     double theta, phi;
     pix2ang_ring(self, pixnum, &theta, &phi);
     ang2eq(theta, phi, ra, dec);
@@ -1244,6 +1243,91 @@ static inline int64_t eq2pix_nest(const struct PyHealPix* hpix,
     return pixnum;
 }
 
+/*
+   get the nominal pixel center for the input theta phi
+   in the nested scheme
+*/
+static void pix2ang_nest(const struct PyHealPix* self,
+                         int64_t pixnum,
+                         double *theta,
+                         double *phi) {
+
+    double z, fn, fact1, fact2;
+    int64_t i, nside, npface, nl4, face_num, ix, iy, scale, ismax,
+            ip_low, ipf, jrt, jpt, jr, nr, jp;
+
+    nside = self->nside;
+    npface = nside * nside;
+    nl4    = 4*nside;
+
+    //     finds the face, and the number in the face
+    face_num = pixnum/npface;    // face number in [0,11]
+    ipf = pixnum % npface;       // pixel number in the face [0,npface-1]
+
+    fn = (double) nside;
+
+    //     finds the x,y on the face (starting from the lowest corner)
+    //     from the pixel number
+    ix = 0;
+    iy = 0;
+    scale = 1;
+    ismax = 4;
+    for (i=0; i <= ismax; i++) {
+        ip_low = ipf & 1023;
+        ix = ix + scale * pix2x[ip_low];
+        iy = iy + scale * pix2y[ip_low];
+        scale = scale * 32;
+        ipf   = ipf/1024;
+    }
+
+    ix = ix + scale * pix2x[ipf];
+    iy = iy + scale * pix2y[ipf];
+
+    //     transforms this in (horizontal, vertical) coordinates
+    jrt = ix + iy;  //  'vertical' in [0,2*(nside-1)]
+    jpt = ix - iy;  // 'horizontal' in [-nside+1,nside-1]
+
+    //     computes the z coordinate on the sphere
+    jr =  jrll[face_num+1]*nside - jrt - 1;   // ring number in [1,4*nside-1]
+
+    if (jr < nside) {
+        // north pole region
+        nr = jr;
+        (*theta) = 2.0 * asin( nr / (sqrt(6.0) * fn) );
+    } else if (jr <= 3*nside) {
+        // equatorial region
+        nr = nside;
+        (*theta) = acos((2*nside-jr)* 2.0/(3.0*fn) );
+    } else if (jr > 3*nside) {
+        // south pole region
+        nr = nl4 - jr;
+        (*theta) = M_PI - 2.0 * asin( nr / (sqrt(6.0) * fn) );
+    }
+
+    //     computes the phi coordinate on the sphere, in [0,2Pi]
+    jp = jpll[face_num+1]*nr + jpt;  // 'phi' number in the ring in [0,8*nr-1]
+    if (jp < 0) {
+        jp = jp + 2*nl4;
+    }
+
+    //(*phi) = jp  * (quartpi / nr);
+    (*phi) = jp  * (M_PI / (4*nr));
+
+}
+
+/*
+   get the nominal pixel center for the input ra dec
+   in the nest scheme
+*/
+static inline void pix2eq_nest(const struct PyHealPix* self,
+                               int64_t pixnum,
+                               double *ra,
+                               double *dec) {
+    double theta, phi;
+    pix2ang_nest(self, pixnum, &theta, &phi);
+    ang2eq(theta, phi, ra, dec);
+}
+
 
 /*
    getters
@@ -1398,8 +1482,7 @@ PyHealPix_fill_pix2ang(struct PyHealPix* self, PyObject* args)
         if (self->scheme == HPX_RING) {
             pix2ang_ring(self, pixnum, theta_ptr, phi_ptr);
         } else {
-            printf("nest is not yet supported!\n");
-            //pix2ang_nest(self, pixnum, theta_ptr, phi_ptr);
+            pix2ang_nest(self, pixnum, theta_ptr, phi_ptr);
         }
     }
 
@@ -1442,7 +1525,7 @@ PyHealPix_fill_pix2eq(struct PyHealPix* self, PyObject* args)
             pix2eq_ring(self, pixnum, ra_ptr, dec_ptr);
         } else {
             printf("nest is not yet supported!\n");
-            //pix2eq_nest(self, pixnum, ra_ptr, dec_ptr);
+            pix2eq_nest(self, pixnum, ra_ptr, dec_ptr);
         }
     }
 
