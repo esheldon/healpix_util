@@ -1288,7 +1288,7 @@ static void pix2ang_nest(const struct PyHealPix* self,
     jpt = ix - iy;  // 'horizontal' in [-nside+1,nside-1]
 
     //     computes the z coordinate on the sphere
-    jr =  jrll[face_num+1]*nside - jrt - 1;   // ring number in [1,4*nside-1]
+    jr =  jrll[face_num]*nside - jrt - 1;   // ring number in [1,4*nside-1]
 
     if (jr < nside) {
         // north pole region
@@ -1305,7 +1305,7 @@ static void pix2ang_nest(const struct PyHealPix* self,
     }
 
     //     computes the phi coordinate on the sphere, in [0,2Pi]
-    jp = jpll[face_num+1]*nr + jpt;  // 'phi' number in the ring in [0,8*nr-1]
+    jp = jpll[face_num]*nr + jpt;  // 'phi' number in the ring in [0,8*nr-1]
     if (jp < 0) {
         jp = jp + 2*nl4;
     }

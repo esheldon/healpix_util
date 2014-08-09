@@ -45,6 +45,7 @@ from . import coords
 
 RING=1
 NESTED=2
+NEST=2
 POINT_OK=1<<0
 QUAD12_OK=1<<1
 QUAD23_OK=1<<2

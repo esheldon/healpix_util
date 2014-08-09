@@ -16,7 +16,7 @@ from .healpix import \
         HealPix, Map, \
         nest2ring, nside2npix, npix2nside, \
         nside_is_ok, npix_is_ok, \
-        RING, NESTED, \
+        RING, NESTED, NEST, \
         get_scheme_name, get_scheme_num
 
 from .fileio import \
