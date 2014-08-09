@@ -14,7 +14,7 @@ from .version import __version__
 
 from .healpix import \
         HealPix, Map, \
-        nest2ring, nside2npix, npix2nside, \
+        nest2ring, ring2nest, nside2npix, npix2nside, \
         nside_is_ok, npix_is_ok, \
         RING, NESTED, NEST, \
         get_scheme_name, get_scheme_num

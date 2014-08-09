@@ -54,6 +54,8 @@
 #define HPX_RING 1
 #define HPX_NEST 2
 
+#define HPX_NS_MAX4 8192
+
 // angular theta,phi in radians
 #define HPX_SYSTEM_ANG 1
 // equatorial ra,dec in degrees
@@ -79,8 +81,8 @@ struct PyHealPix {
 static int64_t pix2x[1024];
 static int64_t pix2y[1024];
 
-static int64_t x2pix1[128];
-static int64_t y2pix1[128];
+static int64_t x2pix[128];
+static int64_t y2pix[128];
 
 static int64_t jrll[]  = {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4}; // in unit of nside
 static int64_t jpll[] =  {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7}; // in unit of nside/2
@@ -284,6 +286,27 @@ static inline int64_t nint64(double x) {
         return (int64_t) (x - 0.5);
     }
 }
+
+int64_t cheap_isqrt(int64_t in) {
+    double din, dout;
+    int64_t out, diff;
+
+    din = (double) in;  // input integer number has ~19 significant digits (in base 10)
+    dout = sqrt(din); // accurate to ~15 digits (base 10) , for ~10 needed
+    out  = (int64_t) floor(dout); // limited accuracy creates round-off error
+
+    // integer arithmetics solves round-off error
+    diff = in - out*out;
+    if (diff < 0) {
+        out -= 1;
+    } else if (diff > 2*out) {
+        out += 1;
+    }
+
+    return out;
+}
+
+
 static void reset_bounds(double *angle,    /* MODIFIED -- the angle to bound in degrees*/
                          double min,       /* IN -- inclusive minimum value */
                          double max        /* IN -- exclusive maximum value */
@@ -552,7 +575,7 @@ static void mk_pix2xy(void)
          ix + iy in {0, 128**2 -1}
 */
 
-static void mk_xy2pix1(void) {
+static void mk_xy2pix(void) {
     int64_t k,ip,i,j,id;
 
     for (i=0; i<128; i++) {
@@ -563,8 +586,8 @@ static void mk_xy2pix1(void) {
         while (1) {
 
             if (j==0) {
-                x2pix1[i] = k;
-                y2pix1[i] = 2*k;
+                x2pix[i] = k;
+                y2pix[i] = 2*k;
                 break;
             }
 
@@ -686,22 +709,32 @@ static void nest2ring_arr(int64_t nside,
         face_num = ipnest[ai]/npface;   // face number in [0,11]
         ipf = ipnest[ai] & (npface-1);  // pixel number in the face [0,npface-1]
 
-
         // finds the x,y on the face (starting from the lowest corner)
         // from the pixel number
-        ix = 0;
-        iy = 0;
-        scale = 1;
-        ismax = 4;
-        for (i=0; i<= ismax; i++) {
-            ip_low = ipf & 1023;
-            ix = ix + scale * pix2x[ip_low];
-            iy = iy + scale * pix2y[ip_low];
-            scale = scale * 32;
-            ipf   = ipf/1024;
+        if (nside <= HPX_NS_MAX4) {
+            int64_t ip_trunc, ip_med, ip_hi;
+            ip_low   = ipf & 1023;       // content of the last 10 bits
+            ip_trunc = ipf/1024;         // truncation of the last 10 bits
+            ip_med   = ip_trunc & 1023;  // content of the next 10 bits
+            ip_hi    = ip_trunc/1024;    // content of the high weight 10 bits
+
+            ix = 1024*pix2x[ip_hi] + 32*pix2x[ip_med] + pix2x[ip_low];
+            iy = 1024*pix2y[ip_hi] + 32*pix2y[ip_med] + pix2y[ip_low];
+        } else {
+            ix = 0;
+            iy = 0;
+            scale = 1;
+            ismax = 4;
+            for (i=0; i<= ismax; i++) {
+                ip_low = ipf & 1023;
+                ix = ix + scale * pix2x[ip_low];
+                iy = iy + scale * pix2y[ip_low];
+                scale = scale * 32;
+                ipf   = ipf/1024;
+            }
+            ix = ix + scale * pix2x[ipf];
+            iy = iy + scale * pix2y[ipf];
         }
-        ix = ix + scale * pix2x[ipf];
-        iy = iy + scale * pix2y[ipf];
 
         //     transforms this in (horizontal, vertical) coordinates
         jrt = ix + iy;  // 'vertical' in [0,2*(nside-1)]
@@ -745,6 +778,133 @@ static int64_t nest2ring(int64_t nside, int64_t ipnest)
     nest2ring_arr(nside, &ipnest, &ipring, 1);
     return ipring;
 }
+
+/*
+   convert nest pixel to a ring pixel
+*/
+
+static void ring2nest_arr(int64_t nside,
+                          int64_t *ipring_arr,
+                          int64_t *ipnest_arr,
+                          int64_t n)
+{
+    int64_t nl2, nl4, face_num, ipf,
+            ismax, i,
+            irn, iphi, kshift, nr, 
+            ip, ire, 
+            irm, ifm, ifp, irs, irt, ipt,
+            ix, iy, scale, scale_factor,
+            ix_low, iy_low;
+    int64_t ipring, npix, ncap;
+    int64_t ai;
+
+    npix=nside2npix(nside);
+    ncap=nside2ncap(nside);
+    for (ai=0; ai<n; ai++) {
+        ipring = ipring_arr[ai];
+
+        if (ipring < 0 || ipring > npix-1) {
+            ipnest_arr[ai]=-9999;
+            continue;
+        }
+
+        nl2 = 2*nside;
+        nl4 = 4*nside;
+
+        if (ipring < ncap) { 
+            // north polar cap
+
+            irn   = (cheap_isqrt(2*ipring+2) + 1) / 2;// counted from North pole
+            iphi  = ipring - 2*irn*(irn - 1);
+
+            kshift = 0;
+            nr = irn;                 // 1/4 of the number of points on the current ring
+            face_num = iphi / irn;    // in [0,3]
+
+        } else if (ipring < npix - ncap) {
+            // equatorial region
+
+            ip    = ipring - ncap;
+            irn   = ((int64_t) ( ip / nl4 )) + nside; // counted from North pole
+            iphi  = ip & (nl4-1);
+
+            kshift  = (irn+nside) & 1;  // MODULO(irn+nside,2), 1 if irn+nside is odd, 0 otherwise
+            nr = nside;
+            ire =  irn - nside + 1;               //! in [1, 2*nside +1]
+            irm =  nl2 + 2 - ire;
+            ifm = (iphi - ire/2 + nside) / nside; // face boundary
+            ifp = (iphi - irm/2 + nside) / nside;
+
+            if (ifp == ifm) { // faces 4 to 7
+                face_num = (ifp & 3) + 4;
+            } else if (ifp < ifm) { // (half-)faces 0 to 3
+                face_num = ifp;
+            } else { // (half-)faces 8 to 11
+                face_num = ifp + 7;
+            }
+
+        } else { 
+            // south polar cap
+
+            ip    = npix - ipring;
+
+            irs   = (cheap_isqrt(2*ip) +1)/2; // counted from South pole
+            iphi  = 2*irs*(irs + 1) - ip;
+
+            kshift = 0;
+            nr = irs;
+            irn   = nl4 - irs;
+            face_num = iphi / irs + 8; // in [8,11]
+
+        }
+
+        //     finds the (x,y) on the face
+        irt =   irn  - jrll[face_num]*nside + 1;          // in [-nside+1,0]
+        ipt = 2*iphi - jpll[face_num]*nr - kshift + 1;    // ! in [-nside+1,nside-1]
+        if (ipt >= nl2) {
+            ipt = ipt - 8*nside; // for the face #4
+        }
+
+        ix =  (ipt - irt ) / 2;
+        iy = -(ipt + irt ) / 2;
+
+        if (nside <= HPX_NS_MAX4) {
+            ix_low = ix & 127;
+            iy_low = iy & 127;
+            ipf = x2pix[ix_low] + y2pix[iy_low] + (x2pix[ix/128] + y2pix[iy/128]) * 16384;
+        } else {
+            scale = 1;
+            scale_factor = 16384; // 128*128
+            ipf = 0;
+            ismax = 1;// for nside in [2^14, 2^20]
+            if (nside >  1048576 ) {
+                ismax = 3;
+            }
+            for (i=0; i<= ismax; i++) {
+                ix_low = ix & 127; // last 7 bits
+                iy_low = iy & 127; // last 7 bits
+                ipf = ipf + (x2pix[ix_low]+y2pix[iy_low]) * scale;
+                scale = scale * scale_factor;
+                ix  = ix / 128;  // truncate out last 7 bits
+                iy  = iy / 128;
+            }
+            ipf =  ipf + (x2pix[ix]+y2pix[iy]) * scale;
+        }
+
+        //ipnest_arr[ai] = ipf + face_num* (npix/12);   // in [0, 12*nside**2 - 1]
+        ipnest_arr[ai] = ipf + face_num*nside*nside;   // in [0, 12*nside**2 - 1]
+
+    } // over array
+}
+
+static int64_t ring2nest(int64_t nside, int64_t ipring)
+{
+    int64_t ipnest;
+    ring2nest_arr(nside, &ipring, &ipnest, 1);
+    return ipnest;
+}
+
+
 
 /*
 
@@ -827,25 +987,6 @@ static inline int64_t eq2pix_ring(const struct PyHealPix* hpix,
     return pixnum;
 }
 
-
-int64_t cheap_isqrt(int64_t in) {
-    double din, dout;
-    int64_t out, diff;
-
-    din = (double) in;  // input integer number has ~19 significant digits (in base 10)
-    dout = sqrt(din); // accurate to ~15 digits (base 10) , for ~10 needed
-    out  = (int64_t) floor(dout); // limited accuracy creates round-off error
-
-    // integer arithmetics solves round-off error
-    diff = in - out*out;
-    if (diff < 0) {
-        out -= 1;
-    } else if (diff > 2*out) {
-        out += 1;
-    }
-
-    return out;
-}
 
 /*
    get the nominal pixel center for the input theta phi
@@ -1125,6 +1266,21 @@ SKIP2:
     }
 }
 
+static void query_disc_nest(const struct PyHealPix* self,
+                            double ra,
+                            double dec,
+                            double radius_degrees, 
+                            int inclusive,
+                            struct i64stack* listpix) {
+
+    query_disc_ring(self, ra, dec, radius_degrees,
+                    inclusive, listpix);
+    ring2nest_arr(self->nside,
+                  listpix->data,
+                  listpix->data,
+                  listpix->size);
+}
+
 /*
 
 
@@ -1208,24 +1364,30 @@ static int64_t ang2pix_nest(const struct PyHealPix* self,
        }
     }
 
-    scale = 1;
-    scale_factor = 16384;             // 128*128
-    ipf = 0;
-    ismax = 1;                        // for nside in [2^14, 2^20]
-    if (nside >  1048576 ) {
-        ismax = 3;
+    if (nside <= HPX_NS_MAX4) {
+       ix_low = ix & 127;
+       iy_low = iy & 127;
+       ipf =  x2pix[ix_low] + y2pix[iy_low] + (x2pix[ix/128] + y2pix[iy/128]) * 16384;
+    } else {
+        scale = 1;
+        scale_factor = 16384;             // 128*128
+        ipf = 0;
+        ismax = 1;                        // for nside in [2^14, 2^20]
+        if (nside >  1048576 ) {
+            ismax = 3;
+        }
+        for (i=0; i <= ismax; i++) {
+            ix_low = ix & 127;            // last 7 bits
+            iy_low = iy & 127;            // last 7 bits
+            ipf = ipf + (x2pix[ix_low]+y2pix[iy_low]) * scale;
+            scale = scale * scale_factor;
+            ix  =     ix / 128; // truncate out last 7 bits
+            iy  =     iy / 128;
+        }
+        ipf =  ipf + (x2pix[ix]+y2pix[iy]) * scale;
     }
-    for (i=0; i <= ismax; i++) {
-        ix_low = ix & 127;            // last 7 bits
-        iy_low = iy & 127;            // last 7 bits
-        ipf = ipf + (x2pix1[ix_low]+y2pix1[iy_low]) * scale;
-        scale = scale * scale_factor;
-        ix  =     ix / 128; // truncate out last 7 bits
-        iy  =     iy / 128;
-    }
-    ipf =  ipf + (x2pix1[ix]+y2pix1[iy]) * scale;
 
-    ipix = ipf + face_num* nside * nside;   // in [0, 12*nside**2 - 1]
+    ipix = ipf + face_num*nside*nside;   // in [0, 12*nside**2 - 1]
 
     return ipix;
 }
@@ -1590,15 +1752,12 @@ PyHealPix_query_disc(struct PyHealPix* self, PyObject* args)
                         inclusive,
                         listpix);
     } else {
-        printf("nest is not yet supported!\n");
-        /*
         query_disc_nest(self,
-                       ra,
-                       dec,
-                       radius_degrees,
-                       inclusive,
-                       listpix);
-        */
+                        ra,
+                        dec,
+                        radius_degrees,
+                        inclusive,
+                        listpix);
     }
 
     pixnum_obj = make_i64_array(listpix->size, "pixnum", &pixnum_ptr);
@@ -1902,11 +2061,11 @@ PyObject* PyHealPix_fill_nest2ring(PyObject* self, PyObject *args)
     PyObject* ipnest_obj=NULL;
     PyObject* ipring_obj=NULL;
 
-    int nside;
+    long nside;
     int64_t *ipnest_ptr, *ipring_ptr;
 
     npy_intp num;
-    if (!PyArg_ParseTuple(args, (char*)"iOO",
+    if (!PyArg_ParseTuple(args, (char*)"lOO",
                           &nside,&ipnest_obj, &ipring_obj)) {
         return NULL;
     }
@@ -1917,6 +2076,35 @@ PyObject* PyHealPix_fill_nest2ring(PyObject* self, PyObject *args)
     ipring_ptr = (int64_t *) PyArray_DATA(ipring_obj);
 
     nest2ring_arr(nside, ipnest_ptr, ipring_ptr, num);
+
+    Py_RETURN_NONE;
+}
+
+/*
+   convert ring scheme to nested
+   
+   No error checking here
+*/
+PyObject* PyHealPix_fill_ring2nest(PyObject* self, PyObject *args)
+{
+    PyObject* ipring_obj=NULL;
+    PyObject* ipnest_obj=NULL;
+
+    long nside;
+    int64_t *ipring_ptr, *ipnest_ptr;
+
+    npy_intp num;
+    if (!PyArg_ParseTuple(args, (char*)"lOO",
+                          &nside,&ipring_obj,&ipnest_obj)) {
+        return NULL;
+    }
+
+    num=PyArray_SIZE(ipnest_obj);
+
+    ipring_ptr = (int64_t *) PyArray_DATA(ipring_obj);
+    ipnest_ptr = (int64_t *) PyArray_DATA(ipnest_obj);
+
+    ring2nest_arr(nside, ipring_ptr, ipnest_ptr, num);
 
     Py_RETURN_NONE;
 }
@@ -2066,6 +2254,7 @@ static PyMethodDef healpix_methods[] = {
         "convert theta,phi to x,y,z.  no error checking performed\n"},
 
     {"_fill_nest2ring", (PyCFunction)PyHealPix_fill_nest2ring, METH_VARARGS, "convert nested pixnums to ring scheme pixnums. No error checking here\n"},
+    {"_fill_ring2nest", (PyCFunction)PyHealPix_fill_ring2nest, METH_VARARGS, "convert ring to nested scheme. No error checking here\n"},
 
     {"_fill_posangle_eq", (PyCFunction)PyHealPix_fill_posangle_eq, METH_VARARGS, 
         "get position angle around the input point.  no error checking performed\n"},
@@ -2130,7 +2319,7 @@ init_healpix(void)
 
     // variables useful in many contexts
     mk_pix2xy();
-    mk_xy2pix1();
+    mk_xy2pix();
 
     import_array();
 #if PY_MAJOR_VERSION >= 3

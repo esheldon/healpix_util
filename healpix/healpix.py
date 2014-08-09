@@ -66,7 +66,7 @@ def nest2ring(nside, ipnest):
     returns
     -------
     ipring: scalar array
-        The pixel number(s) in ringscheme
+        The pixel number(s) in ring scheme
     """
 
     # just to hold some metadata
@@ -80,6 +80,35 @@ def nest2ring(nside, ipnest):
     if is_scalar:
         ipring=ipring[0]
     return ipring
+
+def ring2nest(nside, ipring):
+    """
+    convert the input pixel number(s) in ring scheme to nested scheme
+
+    parameters
+    ----------
+    nside: int
+        healpix resolution
+    ipring: scalar or array
+        The pixel number(s) in ring scheme
+
+    returns
+    -------
+    ipnest: scalar or array
+        The pixel number(s) in nested scheme
+    """
+
+    # just to hold some metadata
+    is_scalar=numpy.isscalar(ipring)
+
+    ipring = numpy.array(ipring, dtype='i8', ndmin=1, copy=False)
+    ipnest = numpy.zeros(ipring.size, dtype='i8')
+
+    _healpix._fill_ring2nest(nside, ipring, ipnest)
+
+    if is_scalar:
+        ipnest=ipnest[0]
+    return ipnest
 
 
 
@@ -490,7 +519,11 @@ class Map(object):
             return self.data
         
         if scheme_num==NESTED:
-            raise ValueError("implement ring2nest")
+            ipring=numpy.arange(self.hpix.npix,dtype='i8')
+            ipnest=ring2nest(self.hpix.nside, ipring)
+
+            newdata=self.data.copy()
+            newdata[ipnest]=self.data
         else:
             ipnest=numpy.arange(self.hpix.npix,dtype='i8')
             ipring=nest2ring(self.hpix.nside, ipnest)
