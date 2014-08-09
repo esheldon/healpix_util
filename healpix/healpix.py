@@ -123,8 +123,6 @@ class HealPix(_healpix.HealPix):
             'ring' or 'nested' (case insensitive)
         if an int is input, the value should be
             healpix.RING (1) or healpix.NESTED (2)
-        
-        Currently, only the ring scheme is fully supported
 
     nside: int
         healpix resolution
@@ -169,9 +167,6 @@ class HealPix(_healpix.HealPix):
 
     def __init__(self, scheme, nside):
         scheme_num = get_scheme_num(scheme)
-        if scheme_num != RING:
-            print("only ring scheme is fully supported")
-
         super(HealPix,self).__init__(scheme_num, nside)
 
     def eq2pix(self, ra, dec):
