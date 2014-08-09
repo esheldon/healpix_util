@@ -1,7 +1,7 @@
 /*
 
-   Much of this code was adapted from various C/C++/f90 code distributed
-   with healpix and healpy, under the GPL license
+   Much of this code was adapted from various f90 code distributed with healpix
+   under the GPL license
 
    The original license info is as follows
 
