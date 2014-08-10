@@ -18,20 +18,6 @@ RING=1
 NESTED=2
     integer referring to nested scheme
 
-POINT_OK=1<<0
-    bit mask to indicate a point is "good" in a density map
-QUAD12_OK=1<<1
-    bit mask to indicate pair of quadrants 1+2 is "good" around a point
-    in a density map
-QUAD23_OK=1<<2
-    bit mask to indicate pair of quadrants 2+3 is "good" around a point
-    in a density map
-QUAD34_OK=1<<3
-    bit mask to indicate pair of quadrants 3+4 is "good" around a point
-    in a density map
-QUAD41_OK=1<<4
-    bit mask to indicate pair of quadrants 4+1 is "good" around a point
-    in a density map
 """
 from __future__ import print_function
 import numpy
