@@ -52,7 +52,7 @@
 #define HPX_R2D  57.295779513082323
 
 #define HPX_RING 1
-#define HPX_NEST 2
+#define HPX_NESTED 2
 
 #define HPX_NS_MAX4 8192
 
@@ -70,13 +70,15 @@
 struct PyHealPix {
     PyObject_HEAD
 
-    int scheme;  // HPX_RING or HPX_NEST
+    int scheme;  // HPX_RING or HPX_NESTED
     char scheme_name[7]; // "ring" or "nested"
     int64_t nside;
     int64_t npix;
     int64_t ncap;
     double area;
 
+    // for healpy which often wants a nest= keyword
+    int is_nested;
 };
 static int64_t pix2x[1024];
 static int64_t pix2y[1024];
@@ -614,10 +616,10 @@ PyHealPix_init(struct PyHealPix* self, PyObject *args, PyObject *kwds)
         return -1;
     }
 
-    if (scheme != HPX_RING && scheme != HPX_NEST) {
+    if (scheme != HPX_RING && scheme != HPX_NESTED) {
         PyErr_Format(PyExc_ValueError,
-                     "scheme should be ring (%d) or nest (%d), got %d",
-                     HPX_RING, HPX_NEST, scheme);
+                     "scheme should be ring (%d) or nested (%d), got %d",
+                     HPX_RING, HPX_NESTED, scheme);
         return -1;
     }
     self->scheme = scheme;
@@ -630,6 +632,8 @@ PyHealPix_init(struct PyHealPix* self, PyObject *args, PyObject *kwds)
     self->npix   = nside2npix(nside);
     self->area   = nside2area(nside);
     self->ncap   = nside2ncap(nside);
+
+    self->is_nested = (scheme==HPX_NESTED) ? 1: 0;
     
     return 0;
 }
@@ -684,6 +688,7 @@ PyHealPix_dealloc(struct PyHealPix* self)
    convert nest pixel to a ring pixel
 */
 
+/*
 static void nest2ring_arr(int64_t nside,
                           int64_t *ipnest,
                           int64_t *ipring,
@@ -778,11 +783,13 @@ static int64_t nest2ring(int64_t nside, int64_t ipnest)
     nest2ring_arr(nside, &ipnest, &ipring, 1);
     return ipring;
 }
+*/
 
 /*
    convert nest pixel to a ring pixel
 */
 
+/*
 static void ring2nest_arr(int64_t nside,
                           int64_t *ipring_arr,
                           int64_t *ipnest_arr,
@@ -903,7 +910,7 @@ static int64_t ring2nest(int64_t nside, int64_t ipring)
     ring2nest_arr(nside, &ipring, &ipnest, 1);
     return ipnest;
 }
-
+*/
 
 
 /*
@@ -1065,29 +1072,48 @@ static inline void pix2eq_ring(const struct PyHealPix* self,
    returns the ring closest to the z provided
 */
 
-static int64_t get_ring_num(const struct PyHealPix* self, double z) {
-    int64_t nside, iring;
-    nside=self->nside;
+static int64_t get_ring_num(const struct PyHealPix *self, double z) {
+    int64_t iring;
 
     // rounds double to nearest long long int
-    iring = llrintl( nside*(2.-1.5*z) );
+    iring = llrintl( self->nside*(2.-1.5*z) );
 
     // north cap
     if (z > HPX_TWOTHIRD) {
-        iring = llrintl( nside* sqrt(3.*(1.-z)) );
+        iring = llrintl( self->nside* sqrt(3.*(1.-z)) );
         if (iring == 0) {
             iring = 1;
         }
     } else if (z < -HPX_TWOTHIRD) {
-        iring = llrintl( nside* sqrt(3.*(1.+z)) );
+        iring = llrintl( self->nside* sqrt(3.*(1.+z)) );
 
         if (iring == 0) {
             iring = 1;
         }
-        iring = 4*nside - iring;
+        iring = 4*self->nside - iring;
     }
 
     return iring;
+}
+
+double ring2z(const struct PyHealPix *self, int64_t ir) {
+    double fn, tmp, z;
+
+    fn = (double) self->nside;
+
+    if (ir < self->nside) {
+        // polar cap (north)
+        tmp = (double) ir;
+        z = 1.0 - (tmp * tmp) / (3.0 * fn * fn);
+    } else if (ir < 3*self->nside) {
+        // tropical band
+        z = ( (double)( 2*self->nside-ir) ) * 2.0 / (3.0 * fn);
+    } else {
+        // polar cap (south)
+        tmp = (double) (4*self->nside - ir);
+        z = -1.0 + (tmp * tmp) / (3.0 * fn * fn);
+    }
+    return z;
 }
 
 /*
@@ -1162,22 +1188,21 @@ static void is_in_ring(
    If inclusive==1, find the list of pixels whose centers are contained within
    the disc or if the pixel intersects the disc
 
+   radius in radians
  */
 
 
-static void query_disc_ring(const struct PyHealPix* self,
-                            double ra,
-                            double dec,
-                            double radius_degrees, 
-                            int inclusive,
-                            struct i64stack* listpix) {
+/*
+static void query_disc_xyz(const struct PyHealPix* self,
+                           double x0, double y0, double z0,
+                           double radius, 
+                           int inclusive,
+                           struct i64stack* listpix) {
 
     int64_t nside, irmin, irmax, iz;
-    double cosang, x0, y0, z0, dth1, dth2, phi0, cosphi0, a;
-    double radius; // radians
+    double cosang, dth1, dth2, phi0, cosphi0, a;
     double rlat0, rlat1, rlat2, zmax, zmin, tmp;
 
-    radius = radius_degrees*HPX_D2R;
     if (inclusive) {
         // this number is acos(2/3)
         double fudge = 0.84106867056793033/self->nside; // 1.071* half pixel size
@@ -1191,15 +1216,14 @@ static void query_disc_ring(const struct PyHealPix* self,
     // this does not alter the storage
     i64stack_resize(listpix, 0);
 
-    eq2xyz(ra, dec, &x0, &y0, &z0);
-
     dth1 = 1. / (3.0*nside*nside);
     dth2 = 2. / (3.0*nside);
 
-    phi0=0.0;
     if ((x0 != 0.) || (y0 != 0.)) {
         // in (-Pi, Pi]
         phi0 = atan2(y0, x0);
+    } else {
+        phi0=0.;
     }
     cosphi0 = cos(phi0);
     a = x0*x0 + y0*y0;
@@ -1265,21 +1289,108 @@ SKIP2:
 
     }
 }
+*/
 
+/*
+   this is super slow because I'm converting the pixels from ring to nest.
+
+   look into the stuff in the f90 program, see if faster
+*/
+/*
 static void query_disc_nest(const struct PyHealPix* self,
-                            double ra,
-                            double dec,
+                            double x, double y, double z,
                             double radius_degrees, 
                             int inclusive,
                             struct i64stack* listpix) {
 
-    query_disc_ring(self, ra, dec, radius_degrees,
+    query_disc_xyz(self, x, y, z, radius_degrees,
                     inclusive, listpix);
     ring2nest_arr(self->nside,
                   listpix->data,
                   listpix->data,
                   listpix->size);
 }
+*/
+
+
+/*
+   radius in radians
+
+   TODO check input radius range < PI
+*/
+
+/*
+static double fudge_radius(int64_t nside, double radin, int quadratic) {
+    double radout, fudge, factor;
+
+    factor = sqrt( 0.55555555555555555555 + 1.29691115062192347448165712908*(1.0-0.5/nside) );
+    fudge  = factor * M_PI / (4.0 * nside); //  increase effective radius
+
+    if (quadratic) {
+       radout = sqrt(radin*radin + fudge*fudge);
+    } else {
+       radout = radin + fudge;
+    }
+    if (radout > M_PI) {
+        radout=M_PI;
+    }
+
+    return radout;
+}
+
+
+static void query_disc_xyz_new(const struct PyHealPix* self,
+                               double x, double y, double z,
+                               double radius, 
+                               int inclusive,
+                               struct i64stack* listpix) {
+
+    double 
+        norm_vect0, z0, rlat0, rlat1, rlat2, zmin, zmax;
+    int64_t nside, irmin, irmax, nr, iz;
+
+    nside=self->nside;
+    i64stack_resize(listpix, 0);
+    if (radius <= 0.) {
+        return;
+    }
+
+    if (inclusive) {
+        radius = fudge_radius(nside, radius, 0);
+    }
+
+    //     ---------- circle center -------------
+    norm_vect0=sqrt(x*x + y*y + z*z);
+    z0 = z/norm_vect0;
+
+    //     --- coordinate z of highest and lowest points in the disc ---
+    rlat0  = asin(z0);   // latitude in RAD of the center
+    rlat1  = rlat0 + radius;
+    rlat2  = rlat0 - radius;
+
+    if (rlat1 >=  M_PI_2) {
+       zmax =  1.0;
+    } else {
+       zmax = sin(rlat1);
+    }
+    irmin = get_ring_num(self, zmax);
+    irmin = i64max(1, irmin - 1); // start from a higher point, to be safe
+
+    if (rlat2 <= -M_PI_2) {
+       zmin = -1.0;
+    } else {
+       zmin = sin(rlat2);
+    }
+    irmax = get_ring_num(self, zmin);
+    irmax = i64min(4*nside-1, irmax + 1);  // go down to a lower point
+
+    nr = irmax-irmin+1; // in [1, 4*Nside-1]
+
+    for (iz=irmin; iz<= irmax; iz++) {
+        //ztab[iz-irmin+1] = ring2z(self, iz);
+    }
+}
+*/
 
 /*
 
@@ -1504,6 +1615,12 @@ PyHealPix_get_scheme(struct PyHealPix* self, PyObject* args)
 {
    return Py_BuildValue("s", self->scheme_name); 
 }
+static PyObject*
+PyHealPix_is_nested(struct PyHealPix* self, PyObject* args)
+{
+   return Py_BuildValue("i", self->is_nested); 
+}
+
 
 
 static PyObject*
@@ -1711,12 +1828,13 @@ PyHealPix_fill_pix2eq(struct PyHealPix* self, PyObject* args)
    if system==HPX_SYSTEM_EQ then the input is
        ra,dec,radius_degrees all in degrees
 */
+/*
 static PyObject*
 PyHealPix_query_disc(struct PyHealPix* self, PyObject* args)
 {
     int system, inclusive;
     double ang1, ang2, radius;
-    double ra, dec, radius_degrees;
+    double x, y, z;
     struct i64stack* listpix=NULL;
 
     // output
@@ -1730,12 +1848,10 @@ PyHealPix_query_disc(struct PyHealPix* self, PyObject* args)
     }
 
     if (system==HPX_SYSTEM_ANG) {
-        ang2eq(ang1, ang2, &ra, &dec);
-        radius_degrees = radius*HPX_R2D;
+        ang2xyz(ang1, ang2, &x, &y, &z);
     } else if (system==HPX_SYSTEM_EQ) {
-        ra=ang1;
-        dec=ang2;
-        radius_degrees=radius;
+        eq2xyz(ang1, ang2, &x, &y, &z);
+        radius *= HPX_D2R;
     } else {
         PyErr_Format(PyExc_ValueError, 
                      "system should be %d or %d, got %d\n",
@@ -1745,17 +1861,15 @@ PyHealPix_query_disc(struct PyHealPix* self, PyObject* args)
 
     listpix=i64stack_new(0);
     if (self->scheme==HPX_RING) {
-        query_disc_ring(self,
-                        ra,
-                        dec,
-                        radius_degrees,
-                        inclusive,
-                        listpix);
+        query_disc_xyz(self,
+                       x, y, z,
+                       radius,
+                       inclusive,
+                       listpix);
     } else {
         query_disc_nest(self,
-                        ra,
-                        dec,
-                        radius_degrees,
+                        x, y, z, 
+                        radius,
                         inclusive,
                         listpix);
     }
@@ -1771,21 +1885,24 @@ PyHealPix_query_disc(struct PyHealPix* self, PyObject* args)
 
     return pixnum_obj;
 }
-
+*/
 
 
 static PyMethodDef PyHealPix_methods[] = {
 
     {"get_scheme", (PyCFunction)PyHealPix_get_scheme, METH_VARARGS, "get scheme name\n"},
     {"get_scheme_num", (PyCFunction)PyHealPix_get_scheme_num, METH_VARARGS, "get scheme number\n"},
+    {"is_nested", (PyCFunction)PyHealPix_is_nested, METH_VARARGS, "1 if is nested, else 0\n"},
 
     {"get_nside", (PyCFunction)PyHealPix_get_nside, METH_VARARGS, "get nside\n"},
     {"get_npix", (PyCFunction)PyHealPix_get_npix, METH_VARARGS, "get the number of pixels at this resolution\n"},
     {"get_ncap", (PyCFunction)PyHealPix_get_ncap, METH_VARARGS, "get the number of pixels in the north polar cap at this resolution\n"},
     {"get_area", (PyCFunction)PyHealPix_get_area, METH_VARARGS, "get the area of a pixel at this resolution\n"},
 
+    /*
     {"_query_disc", (PyCFunction)PyHealPix_query_disc, METH_VARARGS, 
         "Find the list of pixels whose centers are contained within or intersect the disc.\n"},
+        */
 
     {"_fill_ang2pix", (PyCFunction)PyHealPix_fill_ang2pix, METH_VARARGS, "convert theta,phi radians to pixel number.  Don't call this method directly, since no error or type checking is performed\n"},
     {"_fill_eq2pix", (PyCFunction)PyHealPix_fill_eq2pix, METH_VARARGS, "convert ra,dec degrees to pixel number.  Don't call this method directly, since no error or type checking is performed\n"},
@@ -2056,6 +2173,7 @@ PyObject* PyHealPix_fill_ang2xyz(PyObject *self, PyObject *args)
    
    No error checking here
 */
+/*
 PyObject* PyHealPix_fill_nest2ring(PyObject* self, PyObject *args)
 {
     PyObject* ipnest_obj=NULL;
@@ -2079,12 +2197,14 @@ PyObject* PyHealPix_fill_nest2ring(PyObject* self, PyObject *args)
 
     Py_RETURN_NONE;
 }
+*/
 
 /*
    convert ring scheme to nested
    
    No error checking here
 */
+/*
 PyObject* PyHealPix_fill_ring2nest(PyObject* self, PyObject *args)
 {
     PyObject* ipring_obj=NULL;
@@ -2108,7 +2228,7 @@ PyObject* PyHealPix_fill_ring2nest(PyObject* self, PyObject *args)
 
     Py_RETURN_NONE;
 }
-
+*/
 
 
 /*
@@ -2253,8 +2373,10 @@ static PyMethodDef healpix_methods[] = {
     {"_fill_ang2xyz", (PyCFunction)PyHealPix_fill_ang2xyz, METH_VARARGS, 
         "convert theta,phi to x,y,z.  no error checking performed\n"},
 
+    /*
     {"_fill_nest2ring", (PyCFunction)PyHealPix_fill_nest2ring, METH_VARARGS, "convert nested pixnums to ring scheme pixnums. No error checking here\n"},
     {"_fill_ring2nest", (PyCFunction)PyHealPix_fill_ring2nest, METH_VARARGS, "convert ring to nested scheme. No error checking here\n"},
+    */
 
     {"_fill_posangle_eq", (PyCFunction)PyHealPix_fill_posangle_eq, METH_VARARGS, 
         "get position angle around the input point.  no error checking performed\n"},

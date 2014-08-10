@@ -1,25 +1,29 @@
 """
 functions
 ---------
-read_map:
+these read and write functions are named readMap etc. to avoid
+conflice with the healpy read_map etc. functions
+
+readMap:
     Read a healpix map into a Map object
-read_maps:
+readMaps:
     Read multiple healpix maps
-read_density_map:
+readDensityMap:
     Read a healpix density map into a DensityMap object
-read_density_maps:
+readDensityMaps:
     Read multiple healpix density maps
 """
 from __future__ import print_function
 import numpy
-from .healpix import HealPix, Map, DensityMap, get_scheme_name
+from .healpix import HealPix, get_scheme_name
+from .maps import Map, DensityMap
 
-def read_map(filename, column=0, **kw):
+def readMap(filename, column=0, **kw):
     """
     read a healpix map from the specified file
 
-    to read multiple maps, use read_maps
-    to read a density map(s), use read_density_map/read_density_maps
+    to read multiple maps, use readMaps
+    to read a density map(s), use readDensityMap/readDensityMap
 
     parameters
     ----------
@@ -89,7 +93,7 @@ def read_map(filename, column=0, **kw):
     else:
         return hmap
 
-def read_maps(filename, **kw):
+def readMaps(filename, **kw):
     """
     read healpix map(s) from the specified file
 
@@ -172,7 +176,7 @@ def read_maps(filename, **kw):
     else:
         return map_dict
 
-def read_density_map(filename, **kw):
+def readDensityMap(filename, **kw):
     """
     read a density healpix map from the specified file
 
@@ -206,7 +210,7 @@ def read_density_map(filename, **kw):
 
     if header=True is specified, a tuple (map, header) is returned
     """
-    res=read_map(filename, **kw)
+    res=readMap(filename, **kw)
     if isinstance(res,tuple):
         hmap,hdr=res
     else:
@@ -218,7 +222,7 @@ def read_density_map(filename, **kw):
     else:
         return density_hmap
 
-def read_density_maps(filename, **kw):
+def readDensityMaps(filename, **kw):
     """
     read multiple density healpix maps from the specified file
 
@@ -252,7 +256,7 @@ def read_density_maps(filename, **kw):
     if header=True is specified, a tuple (maps, header) is returned
     """
     from collections import OrderedDict
-    res=read_maps(filename, **kw)
+    res=readMaps(filename, **kw)
     if isinstance(res,tuple):
         map_dict,hdr=res
     else:
@@ -267,7 +271,7 @@ def read_density_maps(filename, **kw):
     else:
         return density_map_dict
 
-def write_map(filename, hmap, colname='I', **kw):
+def writeMap(filename, hmap, colname='I', **kw):
     """
     write the map to the specified file name
 
@@ -319,14 +323,14 @@ def write_map(filename, hmap, colname='I', **kw):
         fits[-1].write_key("ORDERING",hmap.scheme)
         fits[-1].write_key("NSIDE",hmap.nside)
 
-def write_maps(filename, hmap_dict,  **kw):
+def writeMaps(filename, hmap_dict,  **kw):
     """
     write multiple maps to the same file and hdu
 
     column names are derived from the dict keys
 
     for maps of different size or scheme, it is better to
-    use write_map and different hdus
+    use writeMap and different hdus
 
     data are written in what has become the "standard" for
     healpix, as a table with each row holding 1024 pixels.

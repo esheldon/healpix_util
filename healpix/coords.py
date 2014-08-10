@@ -5,10 +5,8 @@ eq2ang:
     convert equatorial ra,dec in degrees to angular theta, phi in radians
 ang2eq:
     convert angular theta, phi in radians to equatorial ra,dec in degrees
-eq2xyz:
+eq2vec:
     Convert equatorial ra,dec in degrees to x,y,z on the unit sphere
-ang2xyz:
-    Convert angular theta,phi in radians to x,y,z on the unit sphere
 randsphere:
     generate random points on the unit sphere
 randcap:
@@ -82,14 +80,25 @@ def ang2eq(theta, phi):
         ra  = phi*R2D          # in [0,360]
         dec = (pi/2-theta)*R2D # in [-90,90]
     """
+    
+    is_scalar=numpy.isscalar(theta)
 
-    ra = numpy.rad2deg(phi)
-    dec = numpy.rad2deg(numpy.pi*0.5 - theta)
+    theta = numpy.array(theta, dtype='f8', ndmin=1, copy=False)
+    phi = numpy.array(phi, dtype='f8', ndmin=1, copy=False)
+    if theta.size != phi.size:
+        raise ValueError("ra,dec not same size: %s,%s" % (theta.size,phi.size))
+    ra  = numpy.zeros(theta.size,dtype='f8')
+    dec = numpy.zeros(theta.size,dtype='f8')
 
-    return ra,dec
+    _healpix._fill_ang2eq(theta,phi,ra,dec)
 
+    if is_scalar:
+        ra=ra[0]
+        dec=dec[0]
 
-def eq2xyz(ra, dec):
+    return ra, dec
+
+def eq2vec(ra, dec):
     """
     Convert equatorial ra,dec in degrees to x,y,z on the unit sphere
 
@@ -102,7 +111,9 @@ def eq2xyz(ra, dec):
     
     returns
     -------
-    x,y,z on the unit sphere
+    vec with x,y,z on the unit sphere
+        A 1-d vector[3] or a 2-d array[npoints, 3]
+
     """
     is_scalar=numpy.isscalar(ra)
 
@@ -110,54 +121,18 @@ def eq2xyz(ra, dec):
     dec = numpy.array(dec, dtype='f8', ndmin=1, copy=False)
     if ra.size != dec.size:
         raise ValueError("ra,dec not same size: %s,%s" % (ra.size,dec.size))
-    x = numpy.zeros(ra.size,dtype='f8')
-    y = numpy.zeros(ra.size,dtype='f8')
-    z = numpy.zeros(ra.size,dtype='f8')
+
+    vec=numpy.zeros( (ra.size, 3) )
+    x = vec[:,0]
+    y = vec[:,1]
+    z = vec[:,2]
 
     _healpix._fill_eq2xyz(ra,dec,x,y,z)
 
     if is_scalar:
-        x=x[0]
-        y=y[0]
-        z=z[0]
+        vec=vec[0,:]
 
-    return x,y,z
-
-
-def ang2xyz(theta, phi):
-    """
-    Convert angular theta,phi in radians to x,y,z on the unit sphere
-
-    parameters
-    ----------
-    theta: scalar or array
-        theta in radians
-    phi: scalar or array
-        phi in radians
-    
-    returns
-    -------
-    x,y,z on the unit sphere
-    """
-    is_scalar=numpy.isscalar(theta)
-
-    theta = numpy.array(theta, dtype='f8', ndmin=1, copy=False)
-    phi = numpy.array(phi, dtype='f8', ndmin=1, copy=False)
-    if theta.size != phi.size:
-        raise ValueError("theta,phi not same size: %s,%s" % (theta.size,phi.size))
-    x = numpy.zeros(theta.size,dtype='f8')
-    y = numpy.zeros(theta.size,dtype='f8')
-    z = numpy.zeros(theta.size,dtype='f8')
-
-    _healpix._fill_ang2xyz(theta,phi,x,y,z)
-
-    if is_scalar:
-        x=x[0]
-        y=y[0]
-        z=z[0]
-
-    return x,y,z
-
+    return vec
 
 def get_posangle_eq(ra_cen, dec_cen, ra, dec):
     """
@@ -255,7 +230,7 @@ def randsphere(num, system='eq', **kw):
         'ang' for angular theta,phi in radians
             theta in [0,pi]
             phi   in [0,2*pi]
-        'xyz' for x,y,z on the unit sphere
+        'vec' for x,y,z on the unit sphere
     **kw:
         ra_range=, dec_range= to limit range of randoms
             in ra,dec system
@@ -272,9 +247,9 @@ def randsphere(num, system='eq', **kw):
         return randsphere_eq(num, **kw)
     elif system=='ang':
         return randsphere_ang(num, **kw)
-    elif system=='xyz':
+    elif system=='vec':
         theta,phi=randsphere_ang(num)
-        return ang2xyz(theta,phi)
+        return ang2vec(theta,phi)
     else:
         raise ValueError("bad system: '%s'" % sytem)
 
@@ -367,18 +342,6 @@ def randsphere_ang(num, **kw):
     v.clip(min=-1.0, max=1.0, out=v)
     # Now this generates on [0,pi)
     theta = arccos(v)
-
-    '''
-    # number [0,1)
-    v = numpy.random.random(num)
-    # [0,2)
-    v *= 2.0
-    # [-1,1)
-    v -= 1.0
-
-    # Now this generates on [0,pi)
-    theta = numpy.arccos(v)
-    '''
 
     return theta, phi
 

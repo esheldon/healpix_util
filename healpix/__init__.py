@@ -1,29 +1,25 @@
 """
 todo
-
-    Map class to hold a map
-        allow conversions .convert()
-
     test quad_check with real weight map
-
-    in coords.py use coordinate system converts from C code
-
 """
 
-from .version import __version__
+import healpy
+from healpy import *
 
 from .healpix import \
-        HealPix, Map, \
-        nest2ring, ring2nest, nside2npix, npix2nside, \
-        nside_is_ok, npix_is_ok, \
+        HealPix, \
         RING, NESTED, NEST, \
         get_scheme_name, get_scheme_num
 
+from .maps import Map, DensityMap
+
 from .fileio import \
-        read_map, read_maps, \
-        read_density_map, read_density_maps, \
-        write_map
+        readMap, readMaps, \
+        readDensityMap, readDensityMaps, \
+        writeMap, writeMaps
 
 from .coords  import \
-        eq2ang, ang2eq, eq2xyz, ang2xyz, \
+        eq2ang, ang2eq, eq2vec, \
         randsphere, randcap, get_posangle_eq, get_quadrant_eq
+
+from .version import __version__
