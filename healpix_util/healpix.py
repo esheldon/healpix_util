@@ -213,7 +213,7 @@ class HealPix(_healpix.HealPix):
             phi=phi[0]
         return theta, phi
 
-    def query_disc(self, coord1, coord2, radius, system='eq', **kw):
+    def query_disc(self, coord1, coord2, radius, system='eq', mine=False, **kw):
         """
         get pixels that are contained within or intersect the disc
 
@@ -273,17 +273,28 @@ class HealPix(_healpix.HealPix):
         """
         import healpy
 
-        if system=='eq':
-            vec=coords.eq2vec(coord1, coord2)
-            rad_send=numpy.deg2rad(radius)
-        elif system=='ang':
-            vec=healpy.ang2vec(coord1, coord2)
-            rad_send=radius
+        if mine:
+            if system=='eq':
+                sysnum=coords.SYSTEM_EQ
+            elif system=='ang':
+                sysnum=SYSTEM_ANG
+            else:
+                raise ValueError("system should be 'eq' or 'ang'")
+            inclusive=kw.get('inclusive',False)
+            incnum = 1 if inclusive else 0
+            pixnums=self._query_disc(coord1,coord2,radius,sysnum,incnum)
         else:
-            raise ValueError("system should be 'eq' or 'ang'")
+            if system=='eq':
+                vec=coords.eq2vec(coord1, coord2)
+                rad_send=numpy.deg2rad(radius)
+            elif system=='ang':
+                vec=healpy.ang2vec(coord1, coord2)
+                rad_send=radius
+            else:
+                raise ValueError("system should be 'eq' or 'ang'")
 
-        kw['nest'] = self.nested
-        pixnums=healpy.query_disc(self.nside, vec, radius, **kw)
+            kw['nest'] = self.nested
+            pixnums=healpy.query_disc(self.nside, vec, rad_send, **kw)
 
         return pixnums
 

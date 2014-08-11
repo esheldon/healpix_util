@@ -272,7 +272,7 @@ class DensityMap(Map):
     theta,phi=m.genrand(10000,system='ang')
 
     # check quadrants around the specified center
-    maskflags=m.check_quad(ra=200., dec=0., radius=1.0)
+    maskflags=m.check_quad(ra, dec, radius)
     """
 
     def __init__(self, scheme, array):
@@ -450,21 +450,31 @@ class DensityMap(Map):
         pixnums = hpix.query_disc(ra, dec, radius,
                                   system='eq',
                                   inclusive=inclusive)
+        if verbose:
+            print("found",pixnums.size,"pixels")
 
 
         # the "weights" from our map (actually the raw values).
+        if verbose:
+            print("getting weights")
         weights = self.data[pixnums]
 
         # location of center of each pixel
+        if verbose:
+            print("getting pix locations")
         rapix,decpix=hpix.pix2eq(pixnums)
 
         # quadrants around central point for each pixel
+        if verbose:
+            print("getting quadrants")
         quadrants = coords.get_quadrant_eq(ra,dec,rapix,decpix)
 
         count=numpy.zeros(4,dtype='i8')
         wtmax=numpy.zeros(4)
         wsum=numpy.zeros(4)
 
+        if verbose:
+            print("setting flags")
         for i in xrange(4):
             quad=i+1
             w,=numpy.where(quadrants == quad)

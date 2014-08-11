@@ -789,7 +789,6 @@ static int64_t nest2ring(int64_t nside, int64_t ipnest)
    convert nest pixel to a ring pixel
 */
 
-/*
 static void ring2nest_arr(int64_t nside,
                           int64_t *ipring_arr,
                           int64_t *ipnest_arr,
@@ -910,7 +909,6 @@ static int64_t ring2nest(int64_t nside, int64_t ipring)
     ring2nest_arr(nside, &ipring, &ipnest, 1);
     return ipnest;
 }
-*/
 
 
 /*
@@ -1192,7 +1190,6 @@ static void is_in_ring(
  */
 
 
-/*
 static void query_disc_xyz(const struct PyHealPix* self,
                            double x0, double y0, double z0,
                            double radius, 
@@ -1289,14 +1286,13 @@ SKIP2:
 
     }
 }
-*/
 
 /*
    this is super slow because I'm converting the pixels from ring to nest.
 
    look into the stuff in the f90 program, see if faster
 */
-/*
+
 static void query_disc_nest(const struct PyHealPix* self,
                             double x, double y, double z,
                             double radius_degrees, 
@@ -1310,7 +1306,6 @@ static void query_disc_nest(const struct PyHealPix* self,
                   listpix->data,
                   listpix->size);
 }
-*/
 
 
 /*
@@ -1828,7 +1823,7 @@ PyHealPix_fill_pix2eq(struct PyHealPix* self, PyObject* args)
    if system==HPX_SYSTEM_EQ then the input is
        ra,dec,radius_degrees all in degrees
 */
-/*
+
 static PyObject*
 PyHealPix_query_disc(struct PyHealPix* self, PyObject* args)
 {
@@ -1885,7 +1880,6 @@ PyHealPix_query_disc(struct PyHealPix* self, PyObject* args)
 
     return pixnum_obj;
 }
-*/
 
 
 static PyMethodDef PyHealPix_methods[] = {
@@ -1899,10 +1893,8 @@ static PyMethodDef PyHealPix_methods[] = {
     {"get_ncap", (PyCFunction)PyHealPix_get_ncap, METH_VARARGS, "get the number of pixels in the north polar cap at this resolution\n"},
     {"get_area", (PyCFunction)PyHealPix_get_area, METH_VARARGS, "get the area of a pixel at this resolution\n"},
 
-    /*
     {"_query_disc", (PyCFunction)PyHealPix_query_disc, METH_VARARGS, 
         "Find the list of pixels whose centers are contained within or intersect the disc.\n"},
-        */
 
     {"_fill_ang2pix", (PyCFunction)PyHealPix_fill_ang2pix, METH_VARARGS, "convert theta,phi radians to pixel number.  Don't call this method directly, since no error or type checking is performed\n"},
     {"_fill_eq2pix", (PyCFunction)PyHealPix_fill_eq2pix, METH_VARARGS, "convert ra,dec degrees to pixel number.  Don't call this method directly, since no error or type checking is performed\n"},
