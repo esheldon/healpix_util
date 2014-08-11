@@ -26,9 +26,8 @@ QUAD41_OK=1<<4
 from __future__ import print_function
 import numpy
 
-import healpy
 
-from .healpix import HealPix
+from .healpix import HealPix, get_scheme_num, NESTED
 from . import _healpix
 from . import coords
 
@@ -103,7 +102,7 @@ class Map(object):
         in the specified scheme, no copy of the underlying data is made
     """
     def __init__(self, scheme, array):
-
+        import healpy
         array = array.ravel()
         nside = healpy.npix2nside(array.size)
 
@@ -173,6 +172,8 @@ class Map(object):
 
         If the scheme would be unchanged, a reference to the data is returned
         """
+        import healpy
+
         scheme_num = get_scheme_num(scheme)
         if scheme_num == self.hpix.scheme_num:
             return self.data

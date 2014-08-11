@@ -248,8 +248,9 @@ def randsphere(num, system='eq', **kw):
     elif system=='ang':
         return randsphere_ang(num, **kw)
     elif system=='vec':
+        import healpy
         theta,phi=randsphere_ang(num)
-        return ang2vec(theta,phi)
+        return healpy.ang2vec(theta,phi)
     else:
         raise ValueError("bad system: '%s'" % sytem)
 

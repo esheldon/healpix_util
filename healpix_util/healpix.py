@@ -22,7 +22,6 @@ NESTED=2
 from __future__ import print_function
 import numpy
 
-import healpy
 from . import _healpix
 from . import coords
 
@@ -272,7 +271,7 @@ class HealPix(_healpix.HealPix):
         radius=1.0
         pixnums=hpix.query_disc(ra, dec, radius)
         """
-
+        import healpy
 
         if system=='eq':
             vec=coords.eq2vec(coord1, coord2)
