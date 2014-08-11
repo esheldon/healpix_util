@@ -14,8 +14,8 @@ from .healpix import \
 from .maps import Map, DensityMap
 
 from .fileio import \
-        readMap, readMaps, \
-        readDensityMap, readDensityMaps, \
+        load_map, load_maps, \
+        load_density_map, load_density_maps, \
         writeMap, writeMaps
 
 from .coords  import \

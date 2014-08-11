@@ -27,6 +27,8 @@ from __future__ import print_function
 import numpy
 
 import healpy
+
+from .healpix import HealPix
 from . import _healpix
 from . import coords
 

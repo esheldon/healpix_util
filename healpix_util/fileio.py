@@ -1,16 +1,16 @@
 """
 functions
 ---------
-these read and write functions are named readMap etc. to avoid
+these read and write functions are named load_map etc. to avoid
 conflice with the healpy read_map etc. functions
 
-readMap:
+load_map:
     Read a healpix map into a Map object
-readMaps:
+load_maps:
     Read multiple healpix maps
-readDensityMap:
+load_density_map:
     Read a healpix density map into a DensityMap object
-readDensityMaps:
+load_density_maps:
     Read multiple healpix density maps
 """
 from __future__ import print_function
@@ -18,12 +18,12 @@ import numpy
 from .healpix import HealPix, get_scheme_name
 from .maps import Map, DensityMap
 
-def readMap(filename, column=0, **kw):
+def load_map(filename, column=0, **kw):
     """
     read a healpix map from the specified file
 
-    to read multiple maps, use readMaps
-    to read a density map(s), use readDensityMap/readDensityMap
+    to read multiple maps, use load_maps
+    to read a density map(s), use load_density_map/load_density_map
 
     parameters
     ----------
@@ -93,7 +93,7 @@ def readMap(filename, column=0, **kw):
     else:
         return hmap
 
-def readMaps(filename, **kw):
+def load_maps(filename, **kw):
     """
     read healpix map(s) from the specified file
 
@@ -176,7 +176,7 @@ def readMaps(filename, **kw):
     else:
         return map_dict
 
-def readDensityMap(filename, **kw):
+def load_density_map(filename, **kw):
     """
     read a density healpix map from the specified file
 
@@ -210,7 +210,7 @@ def readDensityMap(filename, **kw):
 
     if header=True is specified, a tuple (map, header) is returned
     """
-    res=readMap(filename, **kw)
+    res=load_map(filename, **kw)
     if isinstance(res,tuple):
         hmap,hdr=res
     else:
@@ -222,7 +222,7 @@ def readDensityMap(filename, **kw):
     else:
         return density_hmap
 
-def readDensityMaps(filename, **kw):
+def load_density_maps(filename, **kw):
     """
     read multiple density healpix maps from the specified file
 
@@ -256,7 +256,7 @@ def readDensityMaps(filename, **kw):
     if header=True is specified, a tuple (maps, header) is returned
     """
     from collections import OrderedDict
-    res=readMaps(filename, **kw)
+    res=load_maps(filename, **kw)
     if isinstance(res,tuple):
         map_dict,hdr=res
     else:
