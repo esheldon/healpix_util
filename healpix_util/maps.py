@@ -434,6 +434,8 @@ class DensityMap(Map):
             2**4: set if quadrants 4+1 area good pair
         """
 
+        if pmin > 1.0:
+            raise ValueError("pmin should be <= 1.0, got %s" % pmin)
         hpix=self.hpix
 
         maskflags=0
@@ -485,19 +487,18 @@ class DensityMap(Map):
                 wtmax[i] = wts.max()
                 wsum[i] = wts.sum()
 
+        frac_diff_max=2.0*(1.0-pmin)
         for ipair in xrange(4):
             ifirst = ipair % 4
             isec   = (ipair+1) % 4
 
-            wtmax1=wtmax[ifirst]
-            wtmax2=wtmax[isec]
-            if wtmax1 > 0. and wtmax2 > 0.:
-                wtmax12 = max(wtmax1,wtmax2)
-                fm1 = wsum[ifirst]/wtmax12/count[ifirst]
-                fm2 = wsum[isec]/wtmax12/count[isec]
+            wsum1=wsum[ifirst]
+            wsum2=wsum[isec]
+            if wsum1 > 0 and wsum2 > 0:
+                frac_diff = abs(1.0 - float(wsum1)/wsum2)
                 if verbose:
-                    print(ifirst+1,isec+1,fm1,fm2)
-                if fm1 > pmin and fm2 > pmin:
+                    print(ifirst+1,frac_diff_max,frac_diff)
+                if frac_diff < frac_diff_max:
                     maskflags |= 1<<(ipair+1)
 
         return maskflags
