@@ -1851,7 +1851,6 @@ PyHealPix_fill_pix2eq(struct PyHealPix* self, PyObject* args)
         if (self->scheme == HPX_RING) {
             pix2eq_ring(self, pixnum, ra_ptr, dec_ptr);
         } else {
-            printf("nest is not yet supported!\n");
             pix2eq_nest(self, pixnum, ra_ptr, dec_ptr);
         }
     }
