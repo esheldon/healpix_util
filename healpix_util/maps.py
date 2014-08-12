@@ -385,13 +385,10 @@ class DensityMap(Map):
                 nleft -= w.size
         return coord1, coord2
 
-    def check_quad(self, ra, dec, radius,
-                   inclusive=False,
-                   pmin=0.95,
-                   verbose=False):
+    def check_quad(self, ra, dec, radius, ellip_max, inclusive=False):
         """
         Check quadrants around the specified point.  Only makes sens if the map
-        is a weight map (or Neffective, etc).  ra,dec only for now.
+        is a weight map (or Neffective, etc).
 
         currently works in ra,dec only
 
@@ -403,24 +400,15 @@ class DensityMap(Map):
             declination in degrees
         radius: scalar
             radius in degrees
-        pmin: scalar
-            Minimum relative "masked fraction" for quadrants to
-            qualify as "good".
-            
-            This is essentially 
-                weights.sum()/weights.max()/npoints
-            but max weight is determined from the two adjacent
-            quadrants that are being checked.
+        ellip_max: scalar
+            maximum ellipticity allowed for a quadrant pair to be considered
+            "good"
 
         inclusive: bool
             If False, include only pixels whose centers are within the disc.
             If True, include any pixels that intersect the disc
 
             Default is False
-
-
-        verbose: bool
-            If True, print some info about each quadrant
 
         returns
         -------
@@ -433,14 +421,13 @@ class DensityMap(Map):
             2**3: set if quadrants 3+4 area good pair
             2**4: set if quadrants 4+1 area good pair
         """
-
-        if pmin > 1.0:
-            raise ValueError("pmin should be <= 1.0, got %s" % pmin)
-        hpix=self.hpix
+        if ellip_max > 1.0:
+            raise ValueError("ellip_max should be <= 1.0, got %s" % ellip_max)
 
         maskflags=0
 
         # check central point
+        hpix=self.hpix
         pixnum = hpix.eq2pix(ra,dec)
         weight = self.data[pixnum]
         if weight <= 0.0:
@@ -449,58 +436,64 @@ class DensityMap(Map):
         # mark central point as OK
         maskflags |= POINT_OK
 
+        ellip_in_quads = self.get_quad_ellip(ra, dec, radius, inclusive=False)
+
+        for i in xrange(4):
+            if ellip_in_quads[i] < ellip_max:
+                quad=i+1
+                maskflags |= 1<<quad
+
+        return maskflags
+
+    def get_quad_ellip(self, ra, dec, radius, n_min=10, inclusive=False):
+        """
+        Get the weighted ellipticity in 2*theta space for pairs of quadrants,
+        using the map as weights and location of pixels
+
+        currently works in ra,dec only
+
+        parameters
+        ----------
+        ra: scalar
+            right ascension in degrees
+        dec: scalar
+            declination in degrees
+        radius: scalar
+            radius in degrees
+        n_min: scalar
+            minimum required number in each pair of quadrants to perform a
+            measurement.  default is 10
+
+        inclusive: bool
+            If False, include only pixels whose centers are within the disc.
+            If True, include any pixels that intersect the disc
+
+            Default is False
+
+        returns
+        -------
+        ellip: array
+            ellipticity for each of the 4 quadrant pairs
+                1-2, 2-3, 3-4, 4-1
+        """
+
+        hpix=self.hpix
+
         pixnums = hpix.query_disc(ra, dec, radius,
                                   system='eq',
                                   inclusive=inclusive)
-        if verbose:
-            print("found",pixnums.size,"pixels")
 
 
         # the "weights" from our map (actually the raw values).
-        if verbose:
-            print("getting weights")
-        weights = self.data[pixnums]
+        weight = self.data[pixnums]
 
         # location of center of each pixel
-        if verbose:
-            print("getting pix locations")
         rapix,decpix=hpix.pix2eq(pixnums)
 
         # quadrants around central point for each pixel
-        if verbose:
-            print("getting quadrants")
-        quadrants = coords.get_quadrant_eq(ra,dec,rapix,decpix)
 
-        count=numpy.zeros(4,dtype='i8')
-        wtmax=numpy.zeros(4)
-        wsum=numpy.zeros(4)
-
-        if verbose:
-            print("setting flags")
-        for i in xrange(4):
-            quad=i+1
-            w,=numpy.where(quadrants == quad)
-            if w.size > 0:
-                wts = weights[w]
-
-                count[i] = w.size
-                wtmax[i] = wts.max()
-                wsum[i] = wts.sum()
-
-        frac_diff_max=2.0*(1.0-pmin)
-        for ipair in xrange(4):
-            ifirst = ipair % 4
-            isec   = (ipair+1) % 4
-
-            wsum1=wsum[ifirst]
-            wsum2=wsum[isec]
-            if wsum1 > 0 and wsum2 > 0:
-                frac_diff = abs(1.0 - float(wsum1)/wsum2)
-                if verbose:
-                    print(ifirst+1,frac_diff_max,frac_diff)
-                if frac_diff < frac_diff_max:
-                    maskflags |= 1<<(ipair+1)
-
-        return maskflags
+        ellip = coords.get_quad_ellip_eq(ra, dec, rapix, decpix,
+                                         n_min=n_min, weight=weight)
+        return ellip
 
 

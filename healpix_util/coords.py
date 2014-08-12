@@ -20,6 +20,7 @@ SYSTEM_EQ=2
     equatorial ra,dec system in degrees
 """
 
+from __future__ import print_function
 import numpy
 from . import _healpix
 
@@ -174,10 +175,10 @@ def get_posangle_eq(ra_cen, dec_cen, ra, dec):
 
     return posangle
 
-def get_quadrant_eq(ra_cen, dec_cen, ra, dec):
+def get_quadrant_eq(ra_cen, dec_cen, ra, dec, more=False):
     """
     get the quadrant at which each point lies as defined by the center
-    point
+    point.  Optionally get radius and position angle
 
     parameters
     ----------
@@ -192,8 +193,13 @@ def get_quadrant_eq(ra_cen, dec_cen, ra, dec):
 
     returns
     -------
-    quadrant: scalar or array
-        quadrant 1,2,3,4
+    if more==False:
+        quadrant: scalar or array
+            quadrant 1,2,3,4
+
+    if more==True
+        quadrant, r, posangle:
+            with r,posangle in degrees
     """
 
     is_scalar=numpy.isscalar(ra)
@@ -207,12 +213,104 @@ def get_quadrant_eq(ra_cen, dec_cen, ra, dec):
 
     quadrant=numpy.zeros(ra.size, dtype='i4')
 
-    _healpix._fill_quadrant_eq(ra_cen, dec_cen, ra, dec, quadrant)
+    if not more:
+        _healpix._fill_quadrant_eq(ra_cen, dec_cen, ra, dec, quadrant)
+        if is_scalar:
+            quadrant=quadrant[0]
+        return quadrant
+    else:
+        r=numpy.zeros(ra.size, dtype='f8')
+        posangle=numpy.zeros(ra.size, dtype='f8')
+        _healpix._fill_quad_info_eq(ra_cen, dec_cen, ra, dec, quadrant, r, posangle)
+        if is_scalar:
+            quadrant=quadrant[0]
+            r=r[0]
+            posangle=posangle[0]
 
-    if is_scalar:
-        quadrant=quadrant[0]
+        return quadrant, r, posangle
 
-    return quadrant
+def get_quad_ellip_eq(ra_cen, dec_cen, ra, dec, n_min=10, weight=None):
+    """
+    get the weighted ellipticity of points around the centreal position in
+    2*theta space for pairs of quadrants.
+
+    if the number of points in a set of quadrants is less than n_min, the
+    ellipticity is set to 1.0
+
+    parameters
+    ----------
+    ra_cen: scalar
+        right ascensioni of center in degrees
+    dec_cen: scalar
+        declination of center in degrees
+    ra: array
+        right ascension point(s) around the center
+    dec: array
+        declination point(s) around the center
+    n_min: scalar
+        minimum required number in each pair of quadrants to perform a
+        measurement.  default is 10
+    weights: array, optional
+        weight for each point, default equal weights
+
+    returns
+    -------
+    ellip: array
+        ellipticity for each of the 4 quadrant pairs
+            1-2, 2-3, 3-4, 4-1
+    """
+    quadrant, r, pa = get_quadrant_eq(ra_cen, dec_cen,
+                                      ra, dec, more=True)
+
+    if weight is None:
+        weight = numpy.ones(ra.size)
+
+    # work in 2*theta space
+    numpy.deg2rad(pa,pa)
+    pa *= 2.
+
+    x2theta=r*numpy.cos(pa)
+    y2theta=r*numpy.sin(pa)
+
+    ellip = numpy.ones(4)
+    quads=[1,2,3,4]
+
+    for i in xrange(4):
+        quad1 = i+1
+        quad2 = quad1 + 1
+        if quad2 > 4:
+            quad2 = 1
+
+        print("quadrants:",quad1,quad2)
+
+        w,=numpy.where( (quadrant == quad1) | (quadrant == quad2) )
+        n=w.size
+        if n > 4:
+            ww=weight[w]
+            wsum = ww.sum()
+            if wsum > 0.:
+                wsum_inv=1.0/wsum
+                xx=x2theta[w]
+                yy=y2theta[w]
+
+                xmean = (xx*ww).sum() * wsum_inv
+                ymean = (yy*ww).sum() * wsum_inv
+
+                xmod=xx-xmean
+                ymod=yy-ymean
+                xxvar = (xmod*xmod*ww).sum() * wsum_inv
+                xyvar = (xmod*ymod*ww).sum() * wsum_inv
+                yyvar = (ymod*ymod*ww).sum() * wsum_inv
+
+                T = xxvar + yyvar
+                if T > 0.0:
+                    Tinv=1.0/T
+                    e1 = (xxvar-yyvar)*Tinv
+                    e2 = 2*xyvar*Tinv
+                    e = numpy.sqrt(e1**2 + e2**2)
+                    ellip[i] = e
+
+    return ellip
 
 
 def randsphere(num, system='eq', **kw):

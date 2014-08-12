@@ -239,6 +239,7 @@ static void i64stack_push(struct i64stack* stack, int64_t val) {
     stack->data[stack->size-1] = val;
 }
 
+/*
 static int64_t i64stack_pop(struct i64stack* stack) {
     if (stack->size == 0) {
         return INT64_MAX;
@@ -270,6 +271,7 @@ static void i64stack_sort(struct i64stack* stack) {
 static int64_t* i64stack_find(struct i64stack* stack, int64_t el) {
     return (int64_t*) bsearch(&el, stack->data, stack->size, sizeof(int64_t), __i64stack_compare_el);
 }
+*/
 
 /*
    helper functions
@@ -429,14 +431,10 @@ static double get_posangle_eq(const struct PyHealPixCap* cap,
     return posangle;
 }
 
-static int32_t get_quadrant_eq(const struct PyHealPixCap* cap,
-                               double ra_degrees,
-                               double dec_degrees)
+// position angle in degrees [-180,180]
+static inline int32_t get_quadrant_from_posangle(double posangle)
 {
     int32_t quadrant;
-    double posangle;
-    posangle=get_posangle_eq(cap, ra_degrees, dec_degrees);
-
     if (posangle < -90.) {
         quadrant=3;
     } else if (posangle < 0.0) {
@@ -446,12 +444,67 @@ static int32_t get_quadrant_eq(const struct PyHealPixCap* cap,
     } else {
         quadrant=2;
     }
-    //quadrant = 1 + ( (int) (posangle/90.0) );
-    //quadrant = 2 + ( (int) (posangle/90.0) );
+
+    return quadrant;
+}
+static int32_t get_quadrant_eq(const struct PyHealPixCap* cap,
+                               double ra_degrees,
+                               double dec_degrees)
+{
+    int32_t quadrant;
+    double posangle;
+
+    posangle=get_posangle_eq(cap, ra_degrees, dec_degrees);
+    quadrant = get_quadrant_from_posangle(posangle);
 
     return quadrant;
 }
 
+
+/*
+   r, posangle in degrees
+*/
+static void get_quad_info_eq(const struct PyHealPixCap* cap,
+                             double ra_degrees,
+                             double dec_degrees,
+                             int32_t *quadrant,
+                             double *r,
+                             double *posangle)
+{
+    double ra, dec,
+           cosra, sinra, cosdec, sindec,
+           cosradiff, sinradiff, arg,
+           cos_r;
+
+
+    ra=ra_degrees*HPX_D2R;
+    dec=dec_degrees*HPX_D2R;
+    cosra=cos(ra);
+    sinra=sin(ra);
+    cosdec=cos(dec);
+    sindec=sin(dec);
+
+    cosradiff = cosra*cap->cosra + sinra*cap->sinra;
+    sinradiff = sinra*cap->cosra - cosra*cap->sinra;
+
+    // cos of angle separation
+    cos_r = cap->sindec*sindec + cap->cosdec*cosdec*cosradiff;
+    // angle of separation in radians
+    (*r) = HPX_R2D*acos(cos_r);
+
+    // position angle
+    arg = cap->sindec*cosradiff - cap->cosdec*sindec/cosdec;
+
+    // -pi,pi
+    (*posangle) = atan2(sinradiff, arg) - M_PI_2;
+
+    // -180,180
+    (*posangle) *= HPX_R2D;
+    reset_bounds(posangle, -180.0, 180.0);
+
+    (*quadrant) = get_quadrant_from_posangle(*posangle);
+
+}
 
 static PyObject*
 make_i64_array(npy_intp size, const char* name, int64_t** ptr)
@@ -1520,7 +1573,7 @@ static void pix2ang_nest(const struct PyHealPix* self,
                          double *theta,
                          double *phi) {
 
-    double z, fn, fact1, fact2;
+    double fn;
     int64_t i, nside, npface, nl4, face_num, ix, iy, scale, ismax,
             ip_low, ipf, jrt, jpt, jr, nr, jp;
 
@@ -2299,6 +2352,52 @@ PyObject* PyHealPix_fill_quadrant_eq(PyObject *self, PyObject *args)
 
 }
 
+/*
+   get quadrant, rad, posangle around the central point.  No error checking
+   here
+
+   r, posangle returned in degrees
+*/
+PyObject* PyHealPix_fill_quad_info_eq(PyObject *self, PyObject *args)
+{
+    double ra_cen_degrees,dec_cen_degrees;
+    PyObject* ra_obj=NULL;
+    PyObject* dec_obj=NULL;
+    PyObject* quadrant_obj=NULL;
+    PyObject* r_obj=NULL;
+    PyObject* pa_obj=NULL;
+
+    double ra, dec;
+    int32_t *quadrant_ptr;
+    double *r_ptr, *pa_ptr;
+    npy_intp i, num;
+    struct PyHealPixCap cap;
+
+    if (!PyArg_ParseTuple(args, (char*)"ddOOOOO",
+                          &ra_cen_degrees, &dec_cen_degrees,
+                          &ra_obj, &dec_obj,
+                          &quadrant_obj, &r_obj, &pa_obj)) {
+        return NULL;
+    }
+
+    PyHealPixCap_set(&cap, ra_cen_degrees, dec_cen_degrees);
+
+    num=PyArray_SIZE(ra_obj);
+
+    for (i=0; i<num; i++) {
+        ra  = *(double *) PyArray_GETPTR1(ra_obj, i);
+        dec = *(double *) PyArray_GETPTR1(dec_obj, i);
+        quadrant_ptr = (int32_t *) PyArray_GETPTR1(quadrant_obj, i);
+        r_ptr = (double *) PyArray_GETPTR1(r_obj, i);
+        pa_ptr = (double *) PyArray_GETPTR1(pa_obj, i);
+
+        get_quad_info_eq(&cap, ra, dec, quadrant_ptr, r_ptr, pa_ptr);
+    }
+
+    Py_RETURN_NONE;
+
+}
+
 
 static PyMethodDef healpix_methods[] = {
 
@@ -2374,6 +2473,9 @@ static PyMethodDef healpix_methods[] = {
         "get position angle around the input point.  no error checking performed\n"},
     {"_fill_quadrant_eq", (PyCFunction)PyHealPix_fill_quadrant_eq, METH_VARARGS, 
         "get quadrant around the input point.  no error checking performed\n"},
+
+    {"_fill_quad_info_eq", (PyCFunction)PyHealPix_fill_quad_info_eq, METH_VARARGS, 
+        "fill quadrant and x,y around the input point.  no error checking performed\n"},
 
     {NULL}  /* Sentinel */
 };
