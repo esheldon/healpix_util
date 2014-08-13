@@ -81,6 +81,6 @@ npix=hu.nside2npix(nside)
 
 dependencies
 ============
-numpy
-healpy
-fitsio # for file reading
+- numpy
+- healpy
+- fitsio # for file reading
