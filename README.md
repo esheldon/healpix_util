@@ -9,7 +9,7 @@ with the healpy readers.
 a few examples
 ==============
 
-```
+```python
 import healpix_util as hu
 
 # create a HealPix object.  This will carry around the nside
@@ -62,5 +62,16 @@ ra,dec = dmap.genrand(100000)
 # weight.  This will speed it up greatly
 ra,dec = dmap.genrand(100000, ra_range=[60.,95.], dec_range=[-62.,-42.])
 
-# generate randoms in 
+# generate randoms in theta,phi
+theta,phi = dmap.genrand(100000, ra_range=[60.,95.], dec_range=[-62.,-42.])
+
+# healpy routines are pulled into the healpix_util namespace
+npix=hu.nside2npix(nside)
 ```
+
+
+dependencies
+============
+numpy
+healpy
+fitsio # for file reading
