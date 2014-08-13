@@ -12,8 +12,8 @@ a few examples
 ```python
 import healpix_util as hu
 
-# create a HealPix object.  This will carry around the nside
-# and scheme
+# create a HealPix object.  This will carry around the nside, scheme, npix,
+# etc.
 
 hpix=hu.HealPix("ring", 4096)
 
@@ -42,6 +42,7 @@ pixnums = hpix.query_disc(ra, dec, radius_degrees)
 pixnums = hpix.query_disc(ra, dec, radius_degrees, inclusive=True)
 pixnums = hpix.query_disc(theta, phi, radius_radians, system='ang')
 
+
 # load a healpix.Map object
 m = hu.readMap(filename)
 m = hu.readMap(filename, column='I')
@@ -49,6 +50,14 @@ m = hu.readMap(filename, column='I')
 # load multiple Maps into an ordered dict, keyed by column name
 maps=hu.readMaps(filename)
 maps=hu.readMaps(filename,columns=["I","Q"])
+
+# convert between schemes
+mnest = m.convert("nest")
+mring = m.convert("ring")
+
+# find the mapval for the input coordinates
+mapvals = m.get_mapval(ra, dec)
+mapvals = m.get_mapval(theta, phi, system='ang')
 
 # load a healpix.DensityMap, a special map that represents
 # a spatial density
