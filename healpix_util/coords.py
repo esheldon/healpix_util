@@ -281,8 +281,6 @@ def get_quad_ellip_eq(ra_cen, dec_cen, ra, dec, n_min=10, weight=None):
         if quad2 > 4:
             quad2 = 1
 
-        print("quadrants:",quad1,quad2)
-
         w,=numpy.where( (quadrant == quad1) | (quadrant == quad2) )
         n=w.size
         if n > 4:
