@@ -76,6 +76,20 @@ theta,phi = dmap.genrand(100000, ra_range=[60.,95.], dec_range=[-62.,-42.])
 
 # healpy routines are pulled into the healpix_util namespace
 npix=hu.nside2npix(nside)
+
+
+# obscure features
+# check quadrants around the input points
+# make sure weighted position ellipticity in adjacent quadrants
+# less than 0.05
+ellip_max=0.05
+for i in xrange(ra.size):
+    maskflags[i] = dmap.check_quad(ra[i], dec[i], radius_degrees[i], ellip_max)
+
+# see docs on quad_check
+# checking maskflags > 1 indicates the cluster is "good", but note during
+# a lensing measurement you should be careful to always use sources from
+# the same pair of quadrants (unless all are good)
 ```
 
 
