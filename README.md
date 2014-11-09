@@ -72,7 +72,7 @@ ra,dec = dmap.genrand(100000)
 ra,dec = dmap.genrand(100000, ra_range=[60.,95.], dec_range=[-62.,-42.])
 
 # generate randoms in theta,phi
-theta,phi = dmap.genrand(100000, ra_range=[60.,95.], dec_range=[-62.,-42.])
+theta,phi = dmap.genrand(100000, system='ang', theta_range=tr, phi_range=pr)
 
 # healpy routines are pulled into the healpix_util namespace
 npix=hu.nside2npix(nside)
