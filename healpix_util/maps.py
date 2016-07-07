@@ -66,19 +66,20 @@ class Map(object):
     m=Map(scheme, array)
     print(m)
 
-    metadata:
     scheme:       1
     scheme_name:  RING
     nside:        4096
     npix:         201326592
     ncap:         33546240
-    area:         6.24178e-08 square degrees
-    area:         0.000224704 square arcmin
-    area:         0.808935 square arcsec
+    area:         6.24178e-08 square radians
+    area:         0.000204906 square degrees
+    area:         0.73766 square arcmin
+    area:         2655.58 square arcsec
 
     map data:
     array([ -1.63750000e+30,  -1.63750000e+30,  -1.63750000e+30, ...,
-            -1.63750000e+30,  -1.63750000e+30,  -1.63750000e+30], dtype=float32)
+	    -1.63750000e+30,  -1.63750000e+30,  -1.63750000e+30], dtype=float32)
+
 
     print("scheme:",m.hpix.scheme)
     print("nside:",m.hpix.nside)
