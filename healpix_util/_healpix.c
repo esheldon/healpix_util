@@ -696,6 +696,7 @@ PyHealPix_repr(struct PyHealPix* self) {
     char repr[255];
     static const char* ring_name="RING";
     static const char* nest_name="NEST";
+    double fac=0, area_degrees=0;
 
     const char *name=NULL;
 
@@ -704,12 +705,18 @@ PyHealPix_repr(struct PyHealPix* self) {
     } else {
         name=nest_name;
     }
+
+    fac=180.0/M_PI;
+    fac = fac*fac;
+
+    area_degrees=self->area*fac;
     sprintf(repr,
             "scheme:       %d\n"
             "scheme_name:  %s\n"
             "nside:        %ld\n"
             "npix:         %ld\n"
             "ncap:         %ld\n" 
+            "area:         %g square radians\n"
             "area:         %g square degrees\n"
             "area:         %g square arcmin\n"
             "area:         %g square arcsec\n",
@@ -719,8 +726,9 @@ PyHealPix_repr(struct PyHealPix* self) {
             self->npix,
             self->ncap,
             self->area,
-            self->area*3600.,
-            self->area*3600.*3600.);
+            area_degrees,
+            area_degrees*3600.,
+            area_degrees*3600.*3600.);
 
    return Py_BuildValue("s", repr);
 }
@@ -1943,7 +1951,7 @@ static PyMethodDef PyHealPix_methods[] = {
     {"get_nside", (PyCFunction)PyHealPix_get_nside, METH_VARARGS, "get nside\n"},
     {"get_npix", (PyCFunction)PyHealPix_get_npix, METH_VARARGS, "get the number of pixels at this resolution\n"},
     {"get_ncap", (PyCFunction)PyHealPix_get_ncap, METH_VARARGS, "get the number of pixels in the north polar cap at this resolution\n"},
-    {"get_area", (PyCFunction)PyHealPix_get_area, METH_VARARGS, "get the area of a pixel at this resolution\n"},
+    {"get_area", (PyCFunction)PyHealPix_get_area, METH_VARARGS, "get the area of a pixel at this resolution, in square radians\n"},
 
     {"_query_disc", (PyCFunction)PyHealPix_query_disc, METH_VARARGS, 
         "Find the list of pixels whose centers are contained within or intersect the disc.\n"},

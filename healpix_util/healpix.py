@@ -305,7 +305,7 @@ class HealPix(_healpix.HealPix):
     nside = property(_healpix.HealPix.get_nside,doc="get the resolution")
     npix = property(_healpix.HealPix.get_npix,doc="number of pixels in the sky")
     ncap = property(_healpix.HealPix.get_ncap,doc="number of pixels in the northern cap")
-    area = property(_healpix.HealPix.get_area,doc="area of a pixel")
+    area = property(_healpix.HealPix.get_area,doc="area of a pixel in square radians")
 
 
 
