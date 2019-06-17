@@ -271,7 +271,6 @@ class HealPix(_healpix.HealPix):
         radius=1.0
         pixnums=hpix.query_disc(ra, dec, radius)
         """
-        import healpy
 
         if mine:
             if system=='eq':
@@ -284,6 +283,7 @@ class HealPix(_healpix.HealPix):
             incnum = 1 if inclusive else 0
             pixnums=self._query_disc(coord1,coord2,radius,sysnum,incnum)
         else:
+            import healpy
             if system=='eq':
                 vec=coords.eq2vec(coord1, coord2)
                 rad_send=numpy.deg2rad(radius)
