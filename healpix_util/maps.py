@@ -178,7 +178,7 @@ class Map(object):
         scheme_num = get_scheme_num(scheme)
         if scheme_num == self.hpix.scheme_num:
             return self.data
-        
+
         if scheme_num==NESTED:
             ipring=numpy.arange(self.hpix.npix,dtype='i8')
             ipnest=healpy.ring2nest(self.hpix.nside, ipring)

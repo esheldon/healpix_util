@@ -3,8 +3,11 @@ todo
     test quad_check with real weight map
 """
 
-import healpy
-from healpy import *
+try:
+    import healpy
+    from healpy import *
+except ImportError:
+    pass
 
 from .healpix import \
         HealPix, \
