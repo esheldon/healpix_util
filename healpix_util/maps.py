@@ -24,18 +24,18 @@ QUAD41_OK=1<<4
     in a density map
 """
 from __future__ import print_function
-import numpy
+import numpy as np
 
 
 from .healpix import HealPix, get_scheme_num, NESTED
-from . import _healpix
 from . import coords
 
-POINT_OK=1<<0
-QUAD12_OK=1<<1
-QUAD23_OK=1<<2
-QUAD34_OK=1<<3
-QUAD41_OK=1<<4
+POINT_OK = 1 << 0
+QUAD12_OK = 1 << 1
+QUAD23_OK = 1 << 2
+QUAD34_OK = 1 << 3
+QUAD41_OK = 1 << 4
+
 
 class Map(object):
     """
@@ -54,7 +54,7 @@ class Map(object):
     attributes
     ----------
     .hpix    # A HealPix object, the pixel specification
-    .data    # the healpix map as a numpy array.  .data.size is 
+    .data    # the healpix map as a numpy array.  .data.size is
              # the number of pixels
     .scheme  # the healpix scheme used (gotten from .hpix)
     .nside   # resolution of healpix map (gotten from .hpix)
@@ -78,7 +78,7 @@ class Map(object):
 
     map data:
     array([ -1.63750000e+30,  -1.63750000e+30,  -1.63750000e+30, ...,
-	    -1.63750000e+30,  -1.63750000e+30,  -1.63750000e+30], dtype=float32)
+           -1.63750000e+30,  -1.63750000e+30,  -1.63750000e+30], dtype=float32)
 
 
     print("scheme:",m.hpix.scheme)
@@ -108,7 +108,7 @@ class Map(object):
         nside = healpy.npix2nside(array.size)
 
         self.hpix = HealPix(scheme, nside)
-        self.data = numpy.array(array, ndmin=1, copy=False)
+        self.data = np.array(array, ndmin=1, copy=False)
 
     def get_mapval(self, coord1, coord2, system='eq'):
         """
@@ -133,10 +133,10 @@ class Map(object):
         -------
         the value of the map at the given coordinates
         """
-        if system=='eq':
-            pixnums=self.hpix.eq2pix(coord1, coord2)
-        elif system=='ang':
-            pixnums=self.hpix.ang2pix(coord1, coord2)
+        if system == 'eq':
+            pixnums = self.hpix.eq2pix(coord1, coord2)
+        elif system == 'ang':
+            pixnums = self.hpix.ang2pix(coord1, coord2)
         else:
             raise ValueError("bad system: '%s'" % system)
 
@@ -179,18 +179,18 @@ class Map(object):
         if scheme_num == self.hpix.scheme_num:
             return self.data
 
-        if scheme_num==NESTED:
-            ipring=numpy.arange(self.hpix.npix,dtype='i8')
-            ipnest=healpy.ring2nest(self.hpix.nside, ipring)
+        if scheme_num == NESTED:
+            ipring = np.arange(self.hpix.npix, dtype='i8')
+            ipnest = healpy.ring2nest(self.hpix.nside, ipring)
 
-            newdata=self.data.copy()
-            newdata[ipnest]=self.data
+            newdata = self.data.copy()
+            newdata[ipnest] = self.data
         else:
-            ipnest=numpy.arange(self.hpix.npix,dtype='i8')
-            ipring=healpy.nest2ring(self.hpix.nside, ipnest)
+            ipnest = np.arange(self.hpix.npix, dtype='i8')
+            ipring = healpy.nest2ring(self.hpix.nside, ipnest)
 
-            newdata=self.data.copy()
-            newdata[ipring]=self.data
+            newdata = self.data.copy()
+            newdata[ipring] = self.data
 
         return newdata
 
@@ -212,15 +212,15 @@ class Map(object):
         """
         return self.hpix.nside
 
-    scheme = property(get_scheme,doc="get the healpix scheme name")
-    scheme_num = property(get_scheme_num,doc="get the healpix scheme number")
-    nside = property(get_nside,doc="get the resolution")
+    scheme = property(get_scheme, doc="get the healpix scheme name")
+    scheme_num = property(get_scheme_num, doc="get the healpix scheme number")
+    nside = property(get_nside, doc="get the resolution")
 
     def __repr__(self):
-        tname=str(type(self))
+        tname = str(type(self))
         hrep = self.hpix.__repr__()
-        array_repr=self.data.__repr__()
-        rep="""
+        array_repr = self.data.__repr__()
+        rep = """
 %s
 
 %s
@@ -284,7 +284,7 @@ class DensityMap(Map):
     """
 
     def __init__(self, scheme, array, rng=None):
-        super(DensityMap,self).__init__(scheme, array)
+        super(DensityMap, self).__init__(scheme, array)
 
         if rng is None:
             rng = np.random.RandomState()
@@ -292,12 +292,12 @@ class DensityMap(Map):
         self.rng = rng
 
         # do not allow values less than zero
-        if numpy.any(self.data < 0.0):
+        if np.any(self.data < 0.0):
             raise ValueError("found %d values < 0 in density map "
                              "density maps must be positive")
 
-        self._maxval=self.data.max()
-        self._maxval_inv=1.0/self._maxval
+        self._maxval = self.data.max()
+        self._maxval_inv = 1.0/self._maxval
 
     def convert(self, scheme):
         """
@@ -379,8 +379,8 @@ class DensityMap(Map):
             ra, dec = self.genrand(nrand, system='eq', **keys)
             return eq2vec(ra, dec)
 
-        coord1 = numpy.zeros(nrand, dtype='f8')
-        coord2 = numpy.zeros(nrand, dtype='f8')
+        coord1 = np.zeros(nrand, dtype='f8')
+        coord2 = np.zeros(nrand, dtype='f8')
 
         ngood = 0
         nleft = nrand
@@ -392,7 +392,7 @@ class DensityMap(Map):
             # keep with probability equal to weight
             ru = self.rng.uniform(low=0.0, high=1.0, size=nleft)
 
-            w, = numpy.where(ru < weights)
+            w, = np.where(ru < weights)
             if w.size > 0:
                 beg = ngood
                 end = ngood + w.size
@@ -431,7 +431,7 @@ class DensityMap(Map):
 
         returns
         -------
-        maskflags: scalar 
+        maskflags: scalar
             bitmask describing the point
 
             2**0: set if central point has weight > 0
@@ -443,11 +443,11 @@ class DensityMap(Map):
         if ellip_max > 1.0:
             raise ValueError("ellip_max should be <= 1.0, got %s" % ellip_max)
 
-        maskflags=0
+        maskflags = 0
 
         # check central point
-        hpix=self.hpix
-        pixnum = hpix.eq2pix(ra,dec)
+        hpix = self.hpix
+        pixnum = hpix.eq2pix(ra, dec)
         weight = self.data[pixnum]
         if weight <= 0.0:
             return maskflags
@@ -457,10 +457,10 @@ class DensityMap(Map):
 
         ellip_in_quads = self.get_quad_ellip(ra, dec, radius, inclusive=False)
 
-        for i in xrange(4):
+        for i in range(4):
             if ellip_in_quads[i] < ellip_max:
-                quad=i+1
-                maskflags |= 1<<quad
+                quad = i+1
+                maskflags |= 1 << quad
 
         return maskflags
 
@@ -496,23 +496,20 @@ class DensityMap(Map):
                 1-2, 2-3, 3-4, 4-1
         """
 
-        hpix=self.hpix
+        hpix = self.hpix
 
         pixnums = hpix.query_disc(ra, dec, radius,
                                   system='eq',
                                   inclusive=inclusive)
 
-
         # the "weights" from our map (actually the raw values).
         weight = self.data[pixnums]
 
         # location of center of each pixel
-        rapix,decpix=hpix.pix2eq(pixnums)
+        rapix, decpix = hpix.pix2eq(pixnums)
 
         # quadrants around central point for each pixel
 
         ellip = coords.get_quad_ellip_eq(ra, dec, rapix, decpix,
                                          n_min=n_min, weight=weight)
         return ellip
-
-

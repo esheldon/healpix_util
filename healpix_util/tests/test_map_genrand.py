@@ -4,7 +4,7 @@ from healpix_util import DensityMap
 
 
 @pytest.mark.parametrize('seed', [94282, 51339, 53912])
-@pytest.mark.parametrize('scheme', ['ring', 'nest'])
+@pytest.mark.parametrize('scheme', ['ring', 'nested'])
 @pytest.mark.parametrize('system', ['eq', 'ang', 'vec'])
 def test_map_genrand(seed, scheme, system):
 
@@ -42,7 +42,7 @@ def test_map_genrand(seed, scheme, system):
 
 
 @pytest.mark.parametrize('seed', [66908, 28628, 80037])
-@pytest.mark.parametrize('scheme', ['ring', 'nest'])
+@pytest.mark.parametrize('scheme', ['ring', 'nested'])
 @pytest.mark.parametrize('ra_range', [(10, 20), (350, 359)])
 @pytest.mark.parametrize('dec_range', [(-89, -80), (-5, 5)])
 def test_randsphere_eq_range(seed, scheme, ra_range, dec_range):
@@ -72,7 +72,7 @@ def test_randsphere_eq_range(seed, scheme, ra_range, dec_range):
 
 
 @pytest.mark.parametrize('seed', [92060, 17665, 38200])
-@pytest.mark.parametrize('scheme', ['ring', 'nest'])
+@pytest.mark.parametrize('scheme', ['ring', 'nested'])
 @pytest.mark.parametrize('system', ['eq', 'ang', 'vec'])
 def test_randsphere_repeatable(seed, scheme, system):
 
