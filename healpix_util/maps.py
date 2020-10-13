@@ -249,6 +249,9 @@ class DensityMap(Map):
         array representing the healpix map data
 
         the minimum value in the array should not be below zero.
+    rng: np.random.RandomState, optional
+        Random number generator for generating random points within the map.
+        If not sent, one will be created
 
     extra methods beyond Map
     ------------------------
@@ -266,18 +269,27 @@ class DensityMap(Map):
     See docs for Map for basic examples.
 
     from hpix_util import DensityMap
-    m=DensityMap(scheme, array)
+    m = DensityMap(scheme, array)
 
     # generate random points according to the map
-    ra,dec=m.genrand(10000)
-    theta,phi=m.genrand(10000,system='ang')
+    ra, dec = m.genrand(10000)
+    theta, phi = m.genrand(10000,system='ang')
+
+    # send your own rng for repeatability
+    rng = np.random.RandomState(51234)
+    m = DensityMap(scheme, array, rng=rng)
 
     # check quadrants around the specified center
-    maskflags=m.check_quad(ra, dec, radius)
+    maskflags = m.check_quad(ra, dec, radius)
     """
 
-    def __init__(self, scheme, array):
+    def __init__(self, scheme, array, rng=None):
         super(DensityMap,self).__init__(scheme, array)
+
+        if rng is None:
+            rng = np.random.RandomState()
+
+        self.rng = rng
 
         # do not allow values less than zero
         if numpy.any(self.data < 0.0):
@@ -354,36 +366,42 @@ class DensityMap(Map):
         system: string
             'eq' for equatorial ra,dec in degrees
             'ang' for angular theta,phi in radians
+            'vec' for x,y,z on the unit sphere
         **kw:
             ra_range=, dec_range= to limit range of randoms
                 in ra,dec system
             theta_range=, phi_range= to limit range of randoms
                 in theta,phi system
         """
-        from .coords import randsphere
+        from .coords import randsphere, eq2vec
 
-        coord1=numpy.zeros(nrand,dtype='f8')
-        coord2=numpy.zeros(nrand,dtype='f8')
+        if system == 'vec':
+            ra, dec = self.genrand(nrand, system='eq', **keys)
+            return eq2vec(ra, dec)
 
-        ngood=0
-        nleft=nrand
+        coord1 = numpy.zeros(nrand, dtype='f8')
+        coord2 = numpy.zeros(nrand, dtype='f8')
+
+        ngood = 0
+        nleft = nrand
         while nleft > 0:
-            t1,t2=randsphere(nleft, system=system, **keys)
+            t1, t2 = randsphere(nleft, system=system, rng=self.rng, **keys)
 
-            weights=self.get_weight(t1,t2,system=system)
+            weights = self.get_weight(t1, t2, system=system)
 
             # keep with probability equal to weight
-            ru = numpy.random.random(nleft)
+            ru = self.rng.uniform(low=0.0, high=1.0, size=nleft)
 
-            w,=numpy.where( ru < weights )
+            w, = numpy.where(ru < weights)
             if w.size > 0:
-                beg=ngood
-                end=ngood+w.size
+                beg = ngood
+                end = ngood + w.size
                 coord1[beg:end] = t1[w]
                 coord2[beg:end] = t2[w]
 
                 ngood += w.size
                 nleft -= w.size
+
         return coord1, coord2
 
     def check_quad(self, ra, dec, radius, ellip_max, inclusive=False):
