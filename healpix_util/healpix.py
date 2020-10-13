@@ -20,14 +20,15 @@ NESTED=2
 
 """
 from __future__ import print_function
-import numpy
+import numpy as np
 
 from . import _healpix
 from . import coords
 
-RING=1
-NESTED=2
-NEST=2
+RING = 1
+NESTED = 2
+NEST = 2
+
 
 class HealPix(_healpix.HealPix):
     """
@@ -84,7 +85,7 @@ class HealPix(_healpix.HealPix):
 
     def __init__(self, scheme, nside):
         scheme_num = get_scheme_num(scheme)
-        super(HealPix,self).__init__(scheme_num, nside)
+        super(HealPix, self).__init__(scheme_num, nside)
 
     def eq2pix(self, ra, dec):
         """
@@ -103,20 +104,20 @@ class HealPix(_healpix.HealPix):
             The pixel number(s)
         """
 
-        is_scalar=numpy.isscalar(ra)
+        is_scalar = np.isscalar(ra)
 
-        ra  = numpy.array(ra, dtype='f8', ndmin=1, copy=False)
-        dec = numpy.array(dec, dtype='f8', ndmin=1, copy=False)
+        ra = np.array(ra, dtype='f8', ndmin=1, copy=False)
+        dec = np.array(dec, dtype='f8', ndmin=1, copy=False)
 
         if ra.size != dec.size:
             raise ValueError("ra,dec must have same size, "
-                             "got %s,%s" % (ra.size,dec.size))
-        pixnum = numpy.zeros(ra.size, dtype='i8')
+                             "got %s,%s" % (ra.size, dec.size))
+        pixnum = np.zeros(ra.size, dtype='i8')
 
-        super(HealPix,self)._fill_eq2pix(ra, dec, pixnum)
+        super(HealPix, self)._fill_eq2pix(ra, dec, pixnum)
 
         if is_scalar:
-            pixnum=pixnum[0]
+            pixnum = pixnum[0]
         return pixnum
 
     def ang2pix(self, theta, phi):
@@ -136,22 +137,21 @@ class HealPix(_healpix.HealPix):
             The pixel number(s)
         """
 
-        is_scalar=numpy.isscalar(theta)
+        is_scalar = np.isscalar(theta)
 
-        theta = numpy.array(theta, dtype='f8', ndmin=1, copy=False)
-        phi = numpy.array(phi, dtype='f8', ndmin=1, copy=False)
+        theta = np.array(theta, dtype='f8', ndmin=1, copy=False)
+        phi = np.array(phi, dtype='f8', ndmin=1, copy=False)
 
         if theta.size != phi.size:
             raise ValueError("theta,phi must have same size, "
-                             "got %s,%s" % (theta.size,phi.size))
-        pixnum = numpy.zeros(theta.size, dtype='i8')
+                             "got %s,%s" % (theta.size, phi.size))
+        pixnum = np.zeros(theta.size, dtype='i8')
 
-        super(HealPix,self)._fill_ang2pix(theta, phi, pixnum)
+        super(HealPix, self)._fill_ang2pix(theta, phi, pixnum)
 
         if is_scalar:
-            pixnum=pixnum[0]
+            pixnum = pixnum[0]
         return pixnum
-
 
     def pix2eq(self, pixnum):
         """
@@ -169,18 +169,18 @@ class HealPix(_healpix.HealPix):
             theta in radians, phi in radians
         """
 
-        is_scalar=numpy.isscalar(pixnum)
+        is_scalar = np.isscalar(pixnum)
 
-        pixnum = numpy.array(pixnum, dtype='i8', ndmin=1, copy=False)
+        pixnum = np.array(pixnum, dtype='i8', ndmin=1, copy=False)
 
-        ra = numpy.zeros(pixnum.size, dtype='f8')
-        dec = numpy.zeros(pixnum.size, dtype='f8')
+        ra = np.zeros(pixnum.size, dtype='f8')
+        dec = np.zeros(pixnum.size, dtype='f8')
 
-        super(HealPix,self)._fill_pix2eq(pixnum, ra, dec)
+        super(HealPix, self)._fill_pix2eq(pixnum, ra, dec)
 
         if is_scalar:
-            ra=ra[0]
-            dec=dec[0]
+            ra = ra[0]
+            dec = dec[0]
         return ra, dec
 
     def pix2ang(self, pixnum):
@@ -199,21 +199,22 @@ class HealPix(_healpix.HealPix):
             theta in radians, phi in radians
         """
 
-        is_scalar=numpy.isscalar(pixnum)
+        is_scalar = np.isscalar(pixnum)
 
-        pixnum = numpy.array(pixnum, dtype='i8', ndmin=1, copy=False)
+        pixnum = np.array(pixnum, dtype='i8', ndmin=1, copy=False)
 
-        theta = numpy.zeros(pixnum.size, dtype='f8')
-        phi = numpy.zeros(pixnum.size, dtype='f8')
+        theta = np.zeros(pixnum.size, dtype='f8')
+        phi = np.zeros(pixnum.size, dtype='f8')
 
-        super(HealPix,self)._fill_pix2ang(pixnum, theta, phi)
+        super(HealPix, self)._fill_pix2ang(pixnum, theta, phi)
 
         if is_scalar:
-            theta=theta[0]
-            phi=phi[0]
+            theta = theta[0]
+            phi = phi[0]
         return theta, phi
 
-    def query_disc(self, coord1, coord2, radius, system='eq', mine=False, **kw):
+    def query_disc(self, coord1, coord2, radius,
+                   system='eq', mine=False, **kw):
         """
         get pixels that are contained within or intersect the disc
 
@@ -273,40 +274,47 @@ class HealPix(_healpix.HealPix):
         """
 
         if mine:
-            if system=='eq':
-                sysnum=coords.SYSTEM_EQ
-            elif system=='ang':
-                sysnum=SYSTEM_ANG
+            if system == 'eq':
+                sysnum = coords.SYSTEM_EQ
+            elif system == 'ang':
+                sysnum = coords.SYSTEM_ANG
             else:
                 raise ValueError("system should be 'eq' or 'ang'")
-            inclusive=kw.get('inclusive',False)
+
+            inclusive = kw.get('inclusive', False)
             incnum = 1 if inclusive else 0
-            pixnums=self._query_disc(coord1,coord2,radius,sysnum,incnum)
+            pixnums = self._query_disc(coord1, coord2, radius, sysnum, incnum)
         else:
             import healpy
-            if system=='eq':
-                vec=coords.eq2vec(coord1, coord2)
-                rad_send=numpy.deg2rad(radius)
-            elif system=='ang':
-                vec=healpy.ang2vec(coord1, coord2)
-                rad_send=radius
+            if system == 'eq':
+                vec = coords.eq2vec(coord1, coord2)
+                rad_send = np.deg2rad(radius)
+            elif system == 'ang':
+                vec = healpy.ang2vec(coord1, coord2)
+                rad_send = radius
             else:
                 raise ValueError("system should be 'eq' or 'ang'")
 
             kw['nest'] = self.nested
-            pixnums=healpy.query_disc(self.nside, vec, rad_send, **kw)
+            pixnums = healpy.query_disc(self.nside, vec, rad_send, **kw)
 
         return pixnums
 
     # read-only attributes
-    scheme = property(_healpix.HealPix.get_scheme,doc="get the healpix scheme name")
-    scheme_num = property(_healpix.HealPix.get_scheme_num,doc="get the healpix scheme number")
-    nested = property(_healpix.HealPix.is_nested,doc="1 if nested else 0")
-    nside = property(_healpix.HealPix.get_nside,doc="get the resolution")
-    npix = property(_healpix.HealPix.get_npix,doc="number of pixels in the sky")
-    ncap = property(_healpix.HealPix.get_ncap,doc="number of pixels in the northern cap")
-    area = property(_healpix.HealPix.get_area,doc="area of a pixel in square radians")
-
+    scheme = property(_healpix.HealPix.get_scheme,
+                      doc="get the healpix scheme name")
+    scheme_num = property(_healpix.HealPix.get_scheme_num,
+                          doc="get the healpix scheme number")
+    nested = property(_healpix.HealPix.is_nested,
+                      doc="1 if nested else 0")
+    nside = property(_healpix.HealPix.get_nside,
+                     doc="get the resolution")
+    npix = property(_healpix.HealPix.get_npix,
+                    doc="number of pixels in the sky")
+    ncap = property(_healpix.HealPix.get_ncap,
+                    doc="number of pixels in the northern cap")
+    area = property(_healpix.HealPix.get_area,
+                    doc="area of a pixel in square radians")
 
 
 def get_scheme_name(scheme):
@@ -330,6 +338,7 @@ def get_scheme_name(scheme):
         raise ValueError("bad scheme specification: '%s'" % scheme)
     return _scheme_name_map[scheme]
 
+
 def get_scheme_num(scheme):
     """
     get the integer version of a scheme.
@@ -352,82 +361,24 @@ def get_scheme_num(scheme):
     return _scheme_num_map[scheme]
 
 
-_scheme_num_map={'ring':RING,
-                 'RING':RING,
-                 RING:RING,
-                 'nest':NESTED,
-                 'nested':NESTED,
-                 'NESTED':NESTED,
-                 'NESTED':NESTED,
-                 NESTED:NESTED}
-_scheme_name_map={'ring':'RING',
-                  'RING':'RING',
-                  RING:'RING',
-                  'nest':'NESTED',
-                  'nested':'NESTED',
-                  'NESTED':'NESTED',
-                  'NESTED':'NESTED',
-                  NESTED:'NESTED'}
+_scheme_num_map = {
+    'ring': RING,
+    'RING': RING,
+    RING: RING,
+    'nest': NESTED,
+    'nested': NESTED,
+    'NESTED': NESTED,
+    'NESTED': NESTED,
+    NESTED: NESTED,
+}
 
-
-'''
-def nest2ring(nside, ipnest):
-    """
-    convert the input pixel number(s) in nested scheme to ring scheme
-
-    parameters
-    ----------
-    nside: int
-        healpix resolution
-    ipnest: scalar or array
-        The pixel number(s) in nested scheme
-
-    returns
-    -------
-    ipring: scalar array
-        The pixel number(s) in ring scheme
-    """
-
-    # just to hold some metadata
-    is_scalar=numpy.isscalar(ipnest)
-
-    ipnest = numpy.array(ipnest, dtype='i8', ndmin=1, copy=False)
-    ipring = numpy.zeros(ipnest.size, dtype='i8')
-
-    _healpix._fill_nest2ring(nside, ipnest, ipring)
-
-    if is_scalar:
-        ipring=ipring[0]
-    return ipring
-
-def ring2nest(nside, ipring):
-    """
-    convert the input pixel number(s) in ring scheme to nested scheme
-
-    parameters
-    ----------
-    nside: int
-        healpix resolution
-    ipring: scalar or array
-        The pixel number(s) in ring scheme
-
-    returns
-    -------
-    ipnest: scalar or array
-        The pixel number(s) in nested scheme
-    """
-
-    # just to hold some metadata
-    is_scalar=numpy.isscalar(ipring)
-
-    ipring = numpy.array(ipring, dtype='i8', ndmin=1, copy=False)
-    ipnest = numpy.zeros(ipring.size, dtype='i8')
-
-    _healpix._fill_ring2nest(nside, ipring, ipnest)
-
-    if is_scalar:
-        ipnest=ipnest[0]
-    return ipnest
-'''
-
-
+_scheme_name_map = {
+    'ring': 'RING',
+    'RING': 'RING',
+    RING: 'RING',
+    'nest': 'NESTED',
+    'nested': 'NESTED',
+    'NESTED': 'NESTED',
+    'NESTED': 'NESTED',
+    NESTED: 'NESTED',
+}

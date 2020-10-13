@@ -17,8 +17,9 @@ writeMap
 """
 from __future__ import print_function
 import numpy
-from .healpix import HealPix, get_scheme_name
+from .healpix import get_scheme_name
 from .maps import Map, DensityMap
+
 
 def readMap(filename, column=0, **kw):
     """
@@ -42,7 +43,7 @@ def readMap(filename, column=0, **kw):
         header, the maps will be converted to the requested scheme.
 
     **kw:
-        other keywords for the fits reading, such as 
+        other keywords for the fits reading, such as
             ext= (default 1)
             header=True to return the header
         See the fitsio documentation for more details
@@ -55,24 +56,24 @@ def readMap(filename, column=0, **kw):
     """
     import fitsio
 
-    scheme = kw.get("scheme",None)
+    scheme = kw.get("scheme", None)
     if scheme is not None:
-        scheme=get_scheme_name(scheme)
+        scheme = get_scheme_name(scheme)
 
     if not numpy.isscalar(column):
-        column=column[0]
+        column = column[0]
 
     with fitsio.FITS(filename) as fits:
 
-        ext=kw.get('ext',1)
+        ext = kw.get('ext', 1)
         hdu = fits[ext]
-        if not isinstance(hdu,fitsio.fitslib.TableHDU):
+        if not isinstance(hdu, fitsio.fitslib.TableHDU):
             raise ValueError("extension %s is not a table" % ext)
 
         hdr = hdu.read_header()
 
         # user may specify columns= here
-        data = hdu.read_column(column,**kw)
+        data = hdu.read_column(column, **kw)
 
     if 'ordering' in hdr:
         scheme_in_file = get_scheme_name(hdr['ordering'].strip())
@@ -83,17 +84,18 @@ def readMap(filename, column=0, **kw):
                              "to specify")
         scheme_in_file = scheme
 
-    hmap = Map(scheme_in_file,data)
+    hmap = Map(scheme_in_file, data)
     if scheme is not None and scheme != scheme_in_file:
         print("converting from scheme '%s' "
-              "to '%s'" % (scheme_in_file,scheme))
-        hmap=hmap.convert(scheme)
+              "to '%s'" % (scheme_in_file, scheme))
+        hmap = hmap.convert(scheme)
 
-    gethead=kw.get("header",False)
+    gethead = kw.get("header", False)
     if gethead:
         return hmap, hdr
     else:
         return hmap
+
 
 def readMaps(filename, **kw):
     """
@@ -112,7 +114,7 @@ def readMaps(filename, **kw):
         header, the maps will be converted to the requested scheme.
 
     **kw:
-        other keywords for the fits reading, such as 
+        other keywords for the fits reading, such as
             ext= (default 1)
             columns= (default is to read all columns)
             header=True to return the header
@@ -126,22 +128,22 @@ def readMaps(filename, **kw):
     from collections import OrderedDict
     import fitsio
 
-    scheme = kw.get("scheme",None)
+    scheme = kw.get("scheme", None)
     if scheme is not None:
-        scheme=get_scheme_name(scheme)
+        scheme = get_scheme_name(scheme)
 
     # make sure columns is a sequence to ensure we get
     # an array with fields back
-    columns=kw.get('columns',None)
+    columns = kw.get('columns', None)
     if columns is not None:
         if numpy.isscalar(columns):
             kw['columns'] = [columns]
 
     with fitsio.FITS(filename) as fits:
 
-        ext=kw.get('ext',1)
+        ext = kw.get('ext', 1)
         hdu = fits[ext]
-        if not isinstance(hdu,fitsio.fitslib.TableHDU):
+        if not isinstance(hdu, fitsio.fitslib.TableHDU):
             raise ValueError("extension %s is not a table" % ext)
 
         hdr = hdu.read_header()
@@ -158,27 +160,28 @@ def readMaps(filename, **kw):
 
     if scheme is not None and scheme != scheme_in_file:
         print("converting from scheme '%s' "
-              "to '%s'" % (scheme_in_file,scheme))
-        do_convert=True
+              "to '%s'" % (scheme_in_file, scheme))
+        do_convert = True
     else:
-        do_convert=False
+        do_convert = False
 
-    names=data.dtype.names
+    names = data.dtype.names
     # there were multiple columns read
-    map_dict=OrderedDict()
+    map_dict = OrderedDict()
     for name in names:
-        m = Map(scheme_in_file,data[name])
+        m = Map(scheme_in_file, data[name])
         if do_convert:
-            m=m.convert(scheme)
+            m = m.convert(scheme)
         map_dict[name] = m
 
-    gethead=kw.get("header",False)
+    gethead = kw.get("header", False)
     if gethead:
         return map_dict, hdr
     else:
         return map_dict
 
-def readDensityMap(filename, **kw):
+
+def readDensityMap(filename, rng=None, **kw):
     """
     read a density healpix map from the specified file
 
@@ -200,8 +203,12 @@ def readDensityMap(filename, **kw):
         Also if the specified scheme does not match the ORDERING in the
         header, the maps will be converted to the requested scheme.
 
+    rng: np.random.RandomState, optional
+        Random number generator for generating random points within the map.
+        If not sent, one will be created
+
     **kw:
-        other keywords for the fits reading, such as 
+        other keywords for the fits reading, such as
             ext= (default 1)
             header=True to return the header
         See the fitsio documentation for more details
@@ -212,19 +219,20 @@ def readDensityMap(filename, **kw):
 
     if header=True is specified, a tuple (map, header) is returned
     """
-    res=readMap(filename, **kw)
-    if isinstance(res,tuple):
-        hmap,hdr=res
+    res = readMap(filename, **kw)
+    if isinstance(res, tuple):
+        hmap, hdr = res
     else:
-        hmap=res
+        hmap = res
 
-    density_hmap = DensityMap(hmap.scheme, hmap.data)
-    if isinstance(res,tuple):
+    density_hmap = DensityMap(hmap.scheme, hmap.data, rng=rng)
+    if isinstance(res, tuple):
         return density_hmap, hdr
     else:
         return density_hmap
 
-def readDensityMaps(filename, **kw):
+
+def readDensityMaps(filename, rng=None, **kw):
     """
     read multiple density healpix maps from the specified file
 
@@ -244,8 +252,12 @@ def readDensityMaps(filename, **kw):
         Also if the specified scheme does not match the ORDERING in the
         header, the maps will be converted to the requested scheme.
 
+    rng: np.random.RandomState, optional
+        Random number generator for generating random points within the map.
+        If not sent, one will be created
+
     **kw:
-        other keywords for the fits reading, such as 
+        other keywords for the fits reading, such as
             ext= (default 1)
             columns= (default is to read all columns)
             header=True to return the header
@@ -258,20 +270,21 @@ def readDensityMaps(filename, **kw):
     if header=True is specified, a tuple (maps, header) is returned
     """
     from collections import OrderedDict
-    res=readMaps(filename, **kw)
-    if isinstance(res,tuple):
-        map_dict,hdr=res
+    res = readMaps(filename, **kw)
+    if isinstance(res, tuple):
+        map_dict, hdr = res
     else:
-        map_dict=res
+        map_dict = res
 
-    density_map_dict=OrderedDict()
-    for name,hmap in map_dict.iteritems():
-        density_map_dict[name] = DensityMap(hmap.scheme, hmap.data)
+    density_map_dict = OrderedDict()
+    for name, hmap in map_dict.iteritems():
+        density_map_dict[name] = DensityMap(hmap.scheme, hmap.data, rng=rng)
 
-    if isinstance(res,tuple):
+    if isinstance(res, tuple):
         return density_map_dict, hdr
     else:
         return density_map_dict
+
 
 def writeMap(filename, hmap, colname='I', **kw):
     """
@@ -306,24 +319,25 @@ def writeMap(filename, hmap, colname='I', **kw):
 
     import fitsio
 
-    scheme_to_write=kw.get('scheme',None)
+    scheme_to_write = kw.get('scheme', None)
     if scheme_to_write is not None:
-        hmap=hmap.convert(scheme_to_write)
+        hmap = hmap.convert(scheme_to_write)
 
-    npix=hmap.data.size
+    npix = hmap.data.size
     if npix > 1024:
-        dt=hmap.data.dtype.descr[0][1]
-        view_dtype=[(colname,dt,1024)]
+        dt = hmap.data.dtype.descr[0][1]
+        view_dtype = [(colname, dt, 1024)]
     else:
-        view_dtype=[(colname,dt,npix)]
+        view_dtype = [(colname, dt, npix)]
 
-    dataview=hmap.data.view(view_dtype)
-    with fitsio.FITS(filename,'rw',**kw) as fits:
+    dataview = hmap.data.view(view_dtype)
+    with fitsio.FITS(filename, 'rw', **kw) as fits:
 
         fits.write(dataview, **kw)
 
-        fits[-1].write_key("ORDERING",hmap.scheme)
-        fits[-1].write_key("NSIDE",hmap.nside)
+        fits[-1].write_key("ORDERING", hmap.scheme)
+        fits[-1].write_key("NSIDE", hmap.nside)
+
 
 def writeMaps(filename, hmap_dict,  **kw):
     """
@@ -362,50 +376,49 @@ def writeMaps(filename, hmap_dict,  **kw):
     from collections import OrderedDict
     import fitsio
 
-    keys=list(hmap_dict.keys())
-    scheme=kw.get('scheme',None)
+    keys = list(hmap_dict.keys())
+    scheme = kw.get('scheme', None)
     if scheme is None:
-        scheme=hmap_dict[keys[0]].scheme
+        scheme = hmap_dict[keys[0]].scheme
     else:
-        scheme=get_scheme_name(scheme)
+        scheme = get_scheme_name(scheme)
 
-    npix=hmap_dict[keys[0]].data.size
+    npix = hmap_dict[keys[0]].data.size
 
     if npix > 1024:
-        nrows=npix/1024
+        nrows = npix/1024
     else:
-        nrows=1
+        nrows = 1
 
-    use_dict=OrderedDict()
-    for key,hmap in hmap_dict.iteritems():
+    use_dict = OrderedDict()
+    for key, hmap in hmap_dict.iteritems():
 
         if hmap.data.size != npix:
             raise ValueError("not all maps are the same size")
 
         if hmap.scheme != scheme:
-            use_dict[key]=hmap.convert(scheme)
+            use_dict[key] = hmap.convert(scheme)
         else:
-            use_dict[key]=hmap
+            use_dict[key] = hmap
 
-    dtype=[]
-    for key,hmap in use_dict.iteritems():
-        datatype=hmap.data.dtype.descr[0][1]
+    dtype = []
+    for key, hmap in use_dict.iteritems():
+        datatype = hmap.data.dtype.descr[0][1]
         if npix > 1024:
-            dt=(key, datatype, 1024)
+            dt = (key, datatype, 1024)
         else:
-            dt=(key, datatype, npix)
+            dt = (key, datatype, npix)
 
-        dtype.append( dt )
+        dtype.append(dt)
 
-    output=numpy.zeros(nrows, dtype=dtype)
+    output = numpy.zeros(nrows, dtype=dtype)
 
-    for key,hmap in use_dict.iteritems():
+    for key, hmap in use_dict.iteritems():
         output[key] = hmap.data.reshape(output[key].shape)
 
-    with fitsio.FITS(filename,'rw',**kw) as fits:
+    with fitsio.FITS(filename, 'rw', **kw) as fits:
 
         fits.write(output, **kw)
 
-        fits[-1].write_key("ORDERING",scheme)
-        fits[-1].write_key("NSIDE",hmap.nside)
-
+        fits[-1].write_key("ORDERING", scheme)
+        fits[-1].write_key("NSIDE", hmap.nside)
