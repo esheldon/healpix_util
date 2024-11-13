@@ -1,21 +1,18 @@
-import distutils
-from distutils.core import setup, Extension, Command
-import os
-import numpy
+from setuptools import setup, Extension
+import numpy as np
 
-ext=Extension(
+ext = Extension(
     "healpix_util._healpix",
     ["healpix_util/_healpix.c"],
-    include_dirs=[numpy.get_include()],
+    include_dirs=[np.get_include()],
 )
 
+__version__ = None
 exec(open('healpix_util/version.py').read())
 
 setup(
-    name="healpix_util", 
+    name="healpix_util",
     packages=['healpix_util'],
     version=__version__,
     ext_modules=[ext],
 )
-
-
