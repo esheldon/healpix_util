@@ -48,8 +48,8 @@ m = hu.readMap(filename)
 m = hu.readMap(filename, column='I')
 
 # load multiple Maps into an ordered dict, keyed by column name
-maps=hu.readMaps(filename)
-maps=hu.readMaps(filename,columns=["I","Q"])
+maps = hu.readMaps(filename)
+maps = hu.readMaps(filename,columns=["I","Q"])
 
 # convert between schemes
 mnest = m.convert("nest")
@@ -61,28 +61,33 @@ mapvals = m.get_mapval(theta, phi, system='ang')
 
 # load a healpix.DensityMap, a special map that represents
 # a spatial density
-dmap=hu.readDensityMap(filename)
-dmaps=hu.readDensityMaps(filename)
+dmap = hu.readDensityMap(filename)
+dmaps = hu.readDensityMaps(filename)
 
 # generate random points from the map
-ra,dec = dmap.genrand(100000)
+ra, dec = dmap.genrand(100000)
+
+# attach a random number generator for repeatability
+# when generating random points
+rng = np.random.RandomState(8312)
+dmap = hu.readDensityMap(filename, rng=rng)
 
 # limit the range to a region known to have non-zero density, or
 # weight.  This will speed it up greatly
-ra,dec = dmap.genrand(100000, ra_range=[60.,95.], dec_range=[-62.,-42.])
+ra, dec = dmap.genrand(100000, ra_range=[60.,95.], dec_range=[-62.,-42.])
 
 # generate randoms in theta,phi
-theta,phi = dmap.genrand(100000, system='ang', theta_range=tr, phi_range=pr)
+theta, phi = dmap.genrand(100000, system='ang', theta_range=tr, phi_range=pr)
 
 # healpy routines are pulled into the healpix_util namespace
-npix=hu.nside2npix(nside)
+npix = hu.nside2npix(nside)
 
 
 # obscure features
 # check quadrants around the input points
 # make sure weighted position ellipticity in adjacent quadrants
 # less than 0.05
-ellip_max=0.05
+ellip_max = 0.05
 for i in xrange(ra.size):
     maskflags[i] = dmap.check_quad(ra[i], dec[i], radius_degrees[i], ellip_max)
 
